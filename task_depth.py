@@ -130,33 +130,26 @@ def visualize(
     save_name: str = "depth_result.png",
     show: bool = True,
 ) -> plt.Figure:
-    """원본 + 깊이 맵 + 색상바를 나란히 표시."""
+    """원본 + raw depth map(colorbar 포함) 나란히 표시."""
     img_np = pil_to_numpy(image)
-    depth_colored = depth_to_colormap(depth, colormap=colormap)
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
     # 원본
     axes[0].imshow(img_np)
     axes[0].axis("off")
     axes[0].set_title("Original", fontsize=12)
 
-    # 깊이 맵 (컬러)
-    axes[1].imshow(depth_colored)
+    # raw depth + colorbar
+    im = axes[1].imshow(depth, cmap=colormap)
     axes[1].axis("off")
-    axes[1].set_title("Depth Map (warm=far, cool=near)", fontsize=12)
-
-    # 깊이 맵 (회색조 + 색상바)
-    im = axes[2].imshow(depth, cmap=colormap)
-    axes[2].axis("off")
-    axes[2].set_title("Depth Map (raw values)", fontsize=12)
-    plt.colorbar(im, ax=axes[2], fraction=0.046, pad=0.04, label="Relative Depth")
+    axes[1].set_title("Depth Map — raw output (larger = nearer)", fontsize=12)
+    plt.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04, label="Relative Depth (raw)")
 
     fig.suptitle("Depth Anything V2 — Monocular Depth Estimation", fontsize=13, y=1.01)
     plt.tight_layout()
 
     save_figure(fig, save_name)
-    save_result(depth_colored, save_name.replace(".png", "_color.png"))
 
     if show:
         plt.show()
@@ -176,7 +169,7 @@ def print_results(depth: np.ndarray, image_size: tuple) -> None:
     print(f"  Min depth : {d_min:.4f}")
     print(f"  Max depth : {d_max:.4f}")
     print(f"  Mean depth: {d_mean:.4f}")
-    print(f"  (Values are relative — larger = farther)")
+    print(f"  (Values are relative — larger = nearer)")
     print(f"{'─'*50}\n")
 
 
@@ -225,7 +218,7 @@ def parse_args():
     parser.add_argument("--image", type=str, required=True, help="입력 이미지 경로")
     parser.add_argument("--colormap", type=str, default="plasma",
                         choices=["plasma", "inferno", "magma", "viridis"],
-                        help="깊이 맵 컬러맵")
+                        help="raw depth map 컬러맵 (default: plasma)")
     parser.add_argument("--no-show", action="store_true")
     return parser.parse_args()
 
