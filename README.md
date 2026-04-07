@@ -13,6 +13,7 @@ python -m venv .venv
 ```
 
 **venv 활성화**
+
 ```cmd
 # Windows
 .venv\Scripts\activate.bat
@@ -22,6 +23,7 @@ source .venv/bin/activate
 ```
 
 **패키지 설치**
+
 ```cmd
 # Windows — venv python으로 직접 실행 (일반 pip은 시스템에 설치됨)
 .venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -31,6 +33,7 @@ pip install -r requirements.txt
 ```
 
 **실행**
+
 ```cmd
 python common.py
 python task_detection.py --image sample.jpg --prompt "person . laptop . bottle ."
