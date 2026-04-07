@@ -22,11 +22,11 @@ python -m venv .venv
 # Linux / macOS
 source .venv/bin/activate
 
-# 패키지 설치 (모든 모델이 HuggingFace transformers로 통일)
-pip install -r requirements.txt
+# 패키지 설치 (venv python으로 pip 실행 - Windows 필수)
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 
 # 환경 확인 (device, dtype 출력)
-python common.py
+.venv\Scripts\python.exe common.py
 
 # 테스트 실행 (sample.jpg를 본인 이미지로 교체)
 python task_depth.py --image sample.jpg
@@ -54,34 +54,27 @@ deeplearning/
 
 ## 각 태스크 실행 방법
 
-```bash
-# 1. 환경 확인
+```cmd
+# venv 활성화 (cmd 터미널 기준)
+.venv\Scripts\activate.bat
+
+# 이후 python 명령은 venv 내부로 자동 연결됨
 python common.py
-
-# 2. Open-Vocabulary Detection
 python task_detection.py --image sample.jpg --prompt "person . laptop . bottle ."
-
-# 3. Segmentation (자동 전체 분할)
 python task_segmentation.py --image sample.jpg --mode auto
-
-# 3. Segmentation (이미지 중앙 포인트)
 python task_segmentation.py --image sample.jpg --mode point
-
-# 4. VLM 단일 질문
 python task_vlm.py --image sample.jpg --question "Describe this image."
-
-# 4. VLM 기본 5개 질문 연속 실행
 python task_vlm.py --image sample.jpg --qa
-
-# 5. Depth Estimation
 python task_depth.py --image sample.jpg
-
-# 6. Pose Estimation
 python task_pose.py --image sample.jpg
-
-# 기말: 전체 파이프라인 (이미지 1장 → 전체 분석 → 보고서)
 python pipeline_final.py --image sample.jpg
 ```
+
+> **주의 (Windows)**: `pip install` 대신 반드시 아래처럼 venv python으로 실행할 것
+> ```cmd
+> .venv\Scripts\python.exe -m pip install -r requirements.txt
+> ```
+> 일반 `pip install`은 시스템 Python에 설치되어 venv에서 인식 안 됨
 
 결과 이미지는 `outputs/` 폴더에 자동 저장됩니다.
 
