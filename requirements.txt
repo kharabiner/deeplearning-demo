@@ -1,31 +1,27 @@
-# Deep Learning Assignment — Foundation Model Tasks
-# Python 3.10 이상 권장
-# 설치: pip install -r requirements.txt
+# Deep Learning Assignment - Foundation Model Tasks
+# Python 3.10+ recommended
+# Install: pip install -r requirements.txt
 
-# ── Core ────────────────────────────────────────────────────────────────────────
+# Core
 torch>=2.2.0
 torchvision>=0.17.0
 transformers>=4.45.0
 huggingface_hub>=0.24.0
 accelerate>=0.27.0
 
-# ── Image processing ────────────────────────────────────────────────────────────
+# Image processing
 Pillow>=10.0.0
 numpy>=1.24.0
 opencv-python>=4.8.0
 matplotlib>=3.7.0
 
-# ── task_detection — Grounding DINO ─────────────────────────────────────────────
-# transformers의 AutoModelForZeroShotObjectDetection 사용 → 별도 패키지 불필요
+# task_detection  : Grounding DINO  -> transformers AutoModelForZeroShotObjectDetection
+# task_segmentation: SAM2           -> transformers Sam2Processor + Sam2Model
+# task_depth      : Depth Anything  -> transformers AutoModelForDepthEstimation
+# (no extra packages needed for the above three)
 
-# ── task_segmentation — SAM2 ────────────────────────────────────────────────────
-# transformers의 Sam2Processor + Sam2Model 사용 → 별도 패키지 불필요
-
-# ── task_vlm — Qwen2-VL ─────────────────────────────────────────────────────────
+# task_vlm: Qwen2-VL
 qwen-vl-utils>=0.0.8
 
-# ── task_depth — Depth Anything V2 ──────────────────────────────────────────────
-# transformers pipeline 사용 (별도 패키지 불필요)
-
-# ── task_pose — ViTPose ──────────────────────────────────────────────────────────
+# task_pose: ViTPose
 timm>=0.9.0
