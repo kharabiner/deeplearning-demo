@@ -1,0 +1,39 @@
+# Deep Learning Assignment — Foundation Model Tasks
+# Python 3.10 이상 권장
+# 설치: pip install -r requirements.txt
+
+# ── Core ────────────────────────────────────────────────────────────────────────
+torch>=2.2.0
+torchvision>=0.17.0
+transformers>=4.45.0
+huggingface_hub>=0.24.0
+accelerate>=0.27.0
+
+# ── Image processing ────────────────────────────────────────────────────────────
+Pillow>=10.0.0
+numpy>=1.24.0
+opencv-python>=4.8.0
+matplotlib>=3.7.0
+
+# ── task_detection — Grounding DINO ─────────────────────────────────────────────
+# groundingdino-py: pip install 후 import 테스트 필요
+# (일부 환경에서 빌드 실패 시: pip install groundingdino-py --no-build-isolation)
+groundingdino-py>=0.4.0
+
+# ── task_segmentation — SAM2 ────────────────────────────────────────────────────
+# Meta SAM2: https://github.com/facebookresearch/sam2
+# pip install git+https://github.com/facebookresearch/sam2.git
+# 또는: pip install sam2 (PyPI 버전, 아래)
+sam2>=1.0.0
+
+# ── task_vlm — Qwen2-VL ─────────────────────────────────────────────────────────
+qwen-vl-utils>=0.0.8
+
+# ── task_depth — Depth Anything V2 ──────────────────────────────────────────────
+# transformers pipeline 사용 (별도 패키지 불필요)
+
+# ── task_pose — ViTPose ──────────────────────────────────────────────────────────
+timm>=0.9.0
+
+# ── 시각화 ──────────────────────────────────────────────────────────────────────
+supervision>=0.19.0

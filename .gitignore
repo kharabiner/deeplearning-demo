@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+
+# 가상환경
+.venv/
+venv/
+env/
+.env
+
+# 결과물 (이미지, 텍스트 — 재현 가능하므로 제외)
+outputs/
+
+# Hugging Face 모델 캐시 (용량이 크므로 제외, 첫 실행 시 자동 다운로드)
+.cache/
+~/.cache/huggingface/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 테스트용 이미지 (용량이 크면 제외, 별도 공유)
+# sample.jpg
+# *.jpg
+# *.png
