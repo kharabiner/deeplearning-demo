@@ -96,15 +96,15 @@ def run(
 def depth_to_colormap(
     depth: np.ndarray,
     colormap: str = "plasma",
-    invert: bool = True,
+    invert: bool = False,
 ) -> np.ndarray:
     """
     깊이 맵을 컬러맵 이미지로 변환.
 
-    Args:
-        depth: float32 NumPy (H, W)
-        colormap: matplotlib colormap 이름 ('plasma', 'inferno', 'magma', 'viridis')
-        invert: True면 가까운 곳이 밝게 (직관적 표시)
+    Depth Anything V2: 값이 클수록 먼 거리
+    plasma colormap: 값이 클수록 warm(노랑/밝음)
+    → invert=False(기본): warm=far, cool=near (자연스러운 매핑)
+    → invert=True: warm=near, cool=far (disparity 스타일)
 
     Returns:
         uint8 NumPy (H, W, 3)
@@ -144,7 +144,7 @@ def visualize(
     # 깊이 맵 (컬러)
     axes[1].imshow(depth_colored)
     axes[1].axis("off")
-    axes[1].set_title("Depth Map (warm=near, cool=far)", fontsize=12)
+    axes[1].set_title("Depth Map (warm=far, cool=near)", fontsize=12)
 
     # 깊이 맵 (회색조 + 색상바)
     im = axes[2].imshow(depth, cmap=colormap)

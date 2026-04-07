@@ -269,7 +269,7 @@ def visualize_all(
     depth_colored = dep.depth_to_colormap(depth_map, colormap="plasma")
     ax_dep.imshow(depth_colored)
     ax_dep.axis("off")
-    ax_dep.set_title("④ Depth Map (warm=near)", fontsize=12, fontweight="bold")
+    ax_dep.set_title("④ Depth Map (warm=far)", fontsize=12, fontweight="bold")
 
     # ⑤ Pose
     ax_pose = fig.add_subplot(gs[1, 1])
