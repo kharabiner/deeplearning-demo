@@ -13,16 +13,17 @@ cd deeplearning
 
 # 가상환경 생성 (선택, 권장)
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
+
+# Windows PowerShell (스크립트 실행 정책 오류 시)
+.venv\Scripts\activate.bat          # cmd 방식으로 활성화 (권장)
+# 또는 PowerShell에서 직접 실행:
+# powershell -ExecutionPolicy Bypass -File .venv\Scripts\Activate.ps1
+
 # Linux / macOS
 source .venv/bin/activate
 
-# 패키지 설치
+# 패키지 설치 (모든 모델이 HuggingFace transformers로 통일)
 pip install -r requirements.txt
-
-# SAM2는 별도 설치 필요
-pip install git+https://github.com/facebookresearch/sam2.git
 
 # 환경 확인 (device, dtype 출력)
 python common.py
@@ -147,13 +148,6 @@ torch.cuda.OutOfMemoryError
 ```
 → `pipeline_final.py`는 모델 간 `del model` + `torch.cuda.empty_cache()` 처리가 되어 있음  
 → VLM만 단독 실행 시 OOM이면 `--max-tokens` 줄이거나 Qwen2-VL-2B → moondream2로 교체
-
-### SAM2 설치 오류
-```
-ModuleNotFoundError: No module named 'sam2'
-```
-→ `pip install git+https://github.com/facebookresearch/sam2.git` 재시도  
-→ 안 되면: `pip install sam2` (PyPI 버전)
 
 ### Grounding DINO 빌드 오류 (Windows)
 ```

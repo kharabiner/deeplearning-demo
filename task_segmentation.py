@@ -1,12 +1,16 @@
 """
 task_segmentation.py — Pixel-level Segmentation
 모델: SAM2 hiera base+ (facebook/sam2-hiera-base-plus)
+출처: Hugging Face — transformers 라이브러리 사용 (별도 sam2 패키지 불필요)
 
 사용법:
-    # Detection 결과 BBox로 세그멘테이션
+    # BBox 기반 (Detection 결과 연동)
     python task_segmentation.py --image sample.jpg --mode bbox
 
-    # 이미지 전체 자동 세그멘테이션
+    # 이미지 중앙 포인트 클릭 예시
+    python task_segmentation.py --image sample.jpg --mode point
+
+    # 이미지 전체 자동 분할
     python task_segmentation.py --image sample.jpg --mode auto
 
 동작:
@@ -21,19 +25,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from PIL import Image
-from sam2.build_sam import build_sam2_hf
-from sam2.sam2_image_predictor import SAM2ImagePredictor
-from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+from transformers import Sam2Processor, Sam2Model, pipeline
 
 from common import (
     get_device,
+    get_dtype,
     load_image,
     resize_if_needed,
     pil_to_numpy,
-    numpy_to_tensor,
+    numpy_to_pil,
     save_figure,
     save_result,
-    numpy_to_pil,
     free_memory,
     OUTPUTS_DIR,
 )
@@ -42,67 +44,87 @@ MODEL_ID = "facebook/sam2-hiera-base-plus"
 
 
 # ── 모델 로드 ──────────────────────────────────────────────────────────────────
-def load_model(device: str) -> SAM2ImagePredictor:
-    """SAM2 ImagePredictor 로드."""
+def load_model(device: str):
+    """SAM2 Processor + Model 로드 (HuggingFace transformers)."""
     print(f"[segmentation] Loading model: {MODEL_ID}")
-    sam2 = build_sam2_hf(MODEL_ID, device=device)
-    predictor = SAM2ImagePredictor(sam2)
-    print(f"[segmentation] Model ready on {device}")
-    return predictor
+    dtype = get_dtype(device)
+    processor = Sam2Processor.from_pretrained(MODEL_ID)
+    model = Sam2Model.from_pretrained(
+        MODEL_ID,
+        torch_dtype=dtype,
+    ).to(device)
+    model.eval()
+    print(f"[segmentation] Model ready on {device} ({dtype})")
+    return processor, model
 
 
-def load_auto_model(device: str) -> SAM2AutomaticMaskGenerator:
-    """SAM2 자동 마스크 생성기 로드."""
-    print(f"[segmentation] Loading auto mask generator: {MODEL_ID}")
-    sam2 = build_sam2_hf(MODEL_ID, device=device)
-    generator = SAM2AutomaticMaskGenerator(
-        sam2,
-        points_per_side=32,
-        pred_iou_thresh=0.88,
-        stability_score_thresh=0.95,
+def load_auto_pipeline(device: str):
+    """자동 마스크 생성용 pipeline 로드."""
+    print(f"[segmentation] Loading auto mask pipeline: {MODEL_ID}")
+    pipe = pipeline(
+        "mask-generation",
+        model=MODEL_ID,
+        device=device if device != "mps" else "cpu",  # pipeline MPS 미지원 시 CPU fallback
+        torch_dtype=get_dtype(device),
     )
-    print(f"[segmentation] Auto mask generator ready")
-    return generator
+    print(f"[segmentation] Auto pipeline ready")
+    return pipe
 
 
 # ── BBox 기반 추론 ─────────────────────────────────────────────────────────────
 def run_with_boxes(
     image: Image.Image,
-    predictor: SAM2ImagePredictor,
+    processor: Sam2Processor,
+    model: Sam2Model,
     boxes: Union[np.ndarray, list],
+    device: Optional[str] = None,
 ) -> list[dict]:
     """
     Bounding Box를 힌트로 SAM2 마스크 생성.
 
     Args:
         image: RGB PIL Image
-        predictor: SAM2ImagePredictor
+        processor: Sam2Processor
+        model: Sam2Model
         boxes: [[x1,y1,x2,y2], ...] 픽셀 절대 좌표
 
     Returns:
         list of {"mask": np.ndarray bool (H,W), "score": float}
     """
-    img_np = pil_to_numpy(image)
-    predictor.set_image(img_np)
+    if device is None:
+        device = next(model.parameters()).device.type
 
-    # float32 명시 (numpy 기본은 float64 → MPS 에러 방지)
-    boxes_np = np.array(boxes, dtype=np.float32)
-
-    with torch.inference_mode():
-        masks, scores, _ = predictor.predict(
-            box=boxes_np,
-            multimask_output=False,
-        )
-
-    # masks shape: (N_boxes, 1, H, W) or (1, H, W)
-    if masks.ndim == 4:
-        masks = masks[:, 0]  # → (N_boxes, H, W)
-    elif masks.ndim == 3 and len(boxes_np) == 1:
-        masks = masks[:1]    # 단일 박스
+    boxes_list = [list(map(float, b)) for b in boxes]
 
     results = []
-    for i, (mask, score) in enumerate(zip(masks, scores.flatten())):
-        results.append({"mask": mask.astype(bool), "score": float(score)})
+    for box in boxes_list:
+        # processor에 box 단위로 넘김 (배치 처리도 가능하나 메모리 안전)
+        inputs = processor(
+            images=image,
+            input_boxes=[[box]],   # [[[x1,y1,x2,y2]]] — (batch, num_boxes, 4)
+            return_tensors="pt",
+        )
+        # float32 강제 (MPS float64 방지)
+        inputs = {
+            k: v.to(device).to(torch.float32) if v.dtype == torch.float64
+            else v.to(device)
+            for k, v in inputs.items()
+        }
+
+        with torch.no_grad():
+            outputs = model(**inputs)
+
+        masks, scores, _ = processor.post_process_masks(
+            outputs.pred_masks.cpu(),
+            inputs["original_sizes"].cpu(),
+            inputs["reshaped_input_sizes"].cpu(),
+        )
+        # masks[0]: (num_masks, H, W)  scores[0]: (num_masks,)
+        best_idx = scores[0].argmax().item()
+        results.append({
+            "mask": masks[0][best_idx].numpy().astype(bool),
+            "score": float(scores[0][best_idx]),
+        })
 
     return results
 
@@ -110,9 +132,11 @@ def run_with_boxes(
 # ── 포인트 기반 추론 ───────────────────────────────────────────────────────────
 def run_with_points(
     image: Image.Image,
-    predictor: SAM2ImagePredictor,
+    processor: Sam2Processor,
+    model: Sam2Model,
     points: list[list[int]],
     point_labels: list[int],
+    device: Optional[str] = None,
 ) -> list[dict]:
     """
     포인트 클릭을 힌트로 SAM2 마스크 생성.
@@ -123,24 +147,38 @@ def run_with_points(
 
     Returns:
         list of {"mask": np.ndarray bool (H,W), "score": float}
+        (신뢰도 높은 순 정렬)
     """
-    img_np = pil_to_numpy(image)
-    predictor.set_image(img_np)
+    if device is None:
+        device = next(model.parameters()).device.type
 
-    # float32 명시 (numpy 기본은 float64 → MPS 에러 방지)
-    pts_np = np.array(points, dtype=np.float32)
-    lbl_np = np.array(point_labels, dtype=np.int32)
+    inputs = processor(
+        images=image,
+        input_points=[points],   # (batch, num_points, 2)
+        input_labels=[point_labels],
+        return_tensors="pt",
+    )
+    inputs = {
+        k: v.to(device).to(torch.float32) if v.dtype == torch.float64
+        else v.to(device)
+        for k, v in inputs.items()
+    }
 
-    with torch.inference_mode():
-        masks, scores, _ = predictor.predict(
-            point_coords=pts_np,
-            point_labels=lbl_np,
-            multimask_output=True,
-        )
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    masks, scores, _ = processor.post_process_masks(
+        outputs.pred_masks.cpu(),
+        inputs["original_sizes"].cpu(),
+        inputs["reshaped_input_sizes"].cpu(),
+    )
 
     results = []
-    for mask, score in zip(masks, scores):
-        results.append({"mask": mask.astype(bool), "score": float(score)})
+    for mask, score in zip(masks[0], scores[0]):
+        results.append({
+            "mask": mask.numpy().astype(bool),
+            "score": float(score),
+        })
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
@@ -149,33 +187,35 @@ def run_with_points(
 # ── 자동 마스크 생성 ───────────────────────────────────────────────────────────
 def run_auto(
     image: Image.Image,
-    generator: SAM2AutomaticMaskGenerator,
+    pipe,
+    points_per_batch: int = 32,
 ) -> list[dict]:
     """
-    이미지 전체 자동 세그멘테이션.
+    이미지 전체 자동 세그멘테이션 (HuggingFace mask-generation pipeline).
 
     Returns:
-        list of {"mask": np.ndarray bool (H,W), "score": float, "area": int}
+        list of {"mask": np.ndarray bool (H,W), "score": float}
     """
-    img_np = pil_to_numpy(image)
-    raw = generator.generate(img_np)
+    outputs = pipe(image, points_per_batch=points_per_batch)
 
     results = []
-    for ann in sorted(raw, key=lambda x: x["area"], reverse=True):
+    for mask_data in outputs["masks"]:
+        score = float(outputs["scores"][len(results)]) if "scores" in outputs else 1.0
         results.append({
-            "mask": ann["segmentation"].astype(bool),
-            "score": float(ann["predicted_iou"]),
-            "area": int(ann["area"]),
+            "mask": np.array(mask_data, dtype=bool),
+            "score": score,
         })
 
+    # 마스크 면적 큰 순 정렬 (시각화 우선순위)
+    results.sort(key=lambda x: x["mask"].sum(), reverse=True)
     return results
 
 
 # ── 시각화 ─────────────────────────────────────────────────────────────────────
 MASK_COLORS = [
-    [230, 25, 75], [60, 180, 75], [67, 99, 216], [245, 130, 49],
-    [145, 30, 180], [66, 212, 244], [240, 50, 230], [191, 239, 69],
-    [250, 190, 212], [70, 153, 144], [220, 190, 255], [255, 250, 200],
+    [230, 25, 75],  [60, 180, 75],  [67, 99, 216],  [245, 130, 49],
+    [145, 30, 180], [66, 212, 244], [240, 50, 230],  [191, 239, 69],
+    [250, 190, 212],[70, 153, 144], [220, 190, 255], [255, 250, 200],
 ]
 
 
@@ -184,10 +224,7 @@ def masks_to_overlay(
     results: list[dict],
     alpha: float = 0.5,
 ) -> np.ndarray:
-    """
-    원본 이미지 위에 마스크를 반투명 색상으로 오버레이.
-    Returns: uint8 NumPy (H, W, 3)
-    """
+    """원본 이미지 위에 마스크를 반투명 색상으로 오버레이. Returns: uint8 (H,W,3)"""
     img_np = pil_to_numpy(image).copy()
     overlay = img_np.copy()
 
@@ -218,11 +255,9 @@ def visualize(
 
     axes[1].imshow(overlay)
     axes[1].axis("off")
-    title = f"SAM2 Segmentation — {len(results)} mask(s)"
-    axes[1].set_title(title, fontsize=12)
+    axes[1].set_title(f"SAM2 Segmentation — {len(results)} mask(s)", fontsize=12)
 
     if labels:
-        img_np = pil_to_numpy(image)
         for i, (res, label) in enumerate(zip(results, labels)):
             mask = res["mask"]
             ys, xs = np.where(mask)
@@ -238,8 +273,6 @@ def visualize(
 
     plt.tight_layout()
     save_figure(fig, save_name)
-
-    # 오버레이 이미지도 별도 저장
     save_result(overlay, save_name.replace(".png", "_overlay.png"))
 
     if show:
@@ -262,7 +295,7 @@ def print_results(results: list[dict], labels: Optional[list[str]] = None) -> No
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 def parse_args():
-    parser = argparse.ArgumentParser(description="Pixel-level Segmentation (SAM2)")
+    parser = argparse.ArgumentParser(description="Pixel-level Segmentation (SAM2 via HuggingFace transformers)")
     parser.add_argument("--image", type=str, required=True, help="입력 이미지 경로")
     parser.add_argument(
         "--mode", type=str, choices=["auto", "point"], default="auto",
@@ -285,20 +318,20 @@ if __name__ == "__main__":
     stem = Path(args.image).stem
 
     if args.mode == "auto":
-        generator = load_auto_model(device)
-        results = run_auto(image, generator)
+        pipe = load_auto_pipeline(device)
+        results = run_auto(image, pipe)
         print_results(results)
         visualize(image, results, save_name=f"{stem}_seg_auto.png", show=not args.no_show)
 
     elif args.mode == "point":
-        predictor = load_model(device)
-        # 이미지 중앙을 클릭한 것으로 예시
+        processor, model = load_model(device)
         center_x, center_y = W // 2, H // 2
         print(f"[segmentation] Point: ({center_x}, {center_y})")
         results = run_with_points(
-            image, predictor,
+            image, processor, model,
             points=[[center_x, center_y]],
             point_labels=[1],
+            device=device,
         )
         print_results(results)
         visualize(image, results, save_name=f"{stem}_seg_point.png", show=not args.no_show)

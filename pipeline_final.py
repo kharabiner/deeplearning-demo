@@ -106,13 +106,13 @@ def run_pipeline(
         labels = ["unknown"]
 
     # ── Step 2: Segmentation ───────────────────────────────────────────────────
-    print("\n[Step 2/5] Pixel-level Segmentation (SAM2)")
-    seg_predictor = seg.load_model(device)
-    seg_results = seg.run_with_boxes(image, seg_predictor, boxes)
+    print("\n[Step 2/5] Pixel-level Segmentation (SAM2 via HuggingFace transformers)")
+    seg_processor, seg_model = seg.load_model(device)
+    seg_results = seg.run_with_boxes(image, seg_processor, seg_model, boxes, device=device)
     results["segmentation"] = seg_results
     seg.print_results(seg_results, labels=labels)
 
-    del seg_predictor
+    del seg_processor, seg_model
     free_memory(device)
 
     # ── Step 3: Depth Estimation ───────────────────────────────────────────────
