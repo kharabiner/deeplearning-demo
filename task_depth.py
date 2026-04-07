@@ -130,23 +130,41 @@ def visualize(
     save_name: str = "depth_result.png",
     show: bool = True,
 ) -> plt.Figure:
-    """원본 + raw depth map(colorbar 포함) 나란히 표시."""
+    """
+    원본과 depth map을 동일한 크기로 나란히 표시.
+    colorbar는 depth map 오른쪽에 별도로 붙임 (이미지 크기에 영향 없음).
+    """
     img_np = pil_to_numpy(image)
+    H, W = img_np.shape[:2]
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    # 이미지 비율에 맞춰 figure 크기 계산
+    # 원본 + depth 두 패널 → 가로는 2배, 세로는 이미지 비율 유지
+    dpi = 100
+    fig_w = (W * 2) / dpi + 1.5   # +1.5 는 colorbar 여유
+    fig_h = H / dpi
+
+    fig, axes = plt.subplots(1, 2, figsize=(fig_w, fig_h),
+                             gridspec_kw={"wspace": 0.05})
 
     # 원본
     axes[0].imshow(img_np)
     axes[0].axis("off")
-    axes[0].set_title("Original", fontsize=12)
+    axes[0].set_title("Original", fontsize=11)
 
-    # raw depth + colorbar
-    im = axes[1].imshow(depth, cmap=colormap)
+    # raw depth — 이미지와 동일 크기로 표시
+    im = axes[1].imshow(depth, cmap=colormap,
+                        extent=[0, W, H, 0],   # 픽셀 좌표로 고정
+                        aspect="auto")
     axes[1].axis("off")
-    axes[1].set_title("Depth Map — raw output (larger = nearer)", fontsize=12)
-    plt.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04, label="Relative Depth (raw)")
+    axes[1].set_title("Depth Map (raw, larger = nearer)", fontsize=11)
 
-    fig.suptitle("Depth Anything V2 — Monocular Depth Estimation", fontsize=13, y=1.01)
+    # colorbar를 depth 축 오른쪽에만 붙임 (원본 축 크기 변화 없음)
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    divider = make_axes_locatable(axes[1])
+    cax = divider.append_axes("right", size="4%", pad=0.05)
+    plt.colorbar(im, cax=cax, label="Relative Depth")
+
+    fig.suptitle("Depth Anything V2 — Monocular Depth Estimation", fontsize=12)
     plt.tight_layout()
 
     save_figure(fig, save_name)
