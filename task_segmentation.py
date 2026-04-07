@@ -29,7 +29,6 @@ from transformers import Sam2Processor, Sam2Model, pipeline
 
 from common import (
     get_device,
-    get_dtype,
     load_image,
     resize_if_needed,
     pil_to_numpy,
@@ -47,14 +46,14 @@ MODEL_ID = "facebook/sam2-hiera-base-plus"
 def load_model(device: str):
     """SAM2 Processor + Model 로드 (HuggingFace transformers)."""
     print(f"[segmentation] Loading model: {MODEL_ID}")
-    dtype = get_dtype(device)
-    processor = Sam2Processor.from_pretrained(MODEL_ID)
+    # SAM2는 float16 환경에서 NMS dtype 불일치 crash 발생 → float32 고정
+    processor = Sam2Processor.from_pretrained(MODEL_ID, use_fast=False)
     model = Sam2Model.from_pretrained(
         MODEL_ID,
-        torch_dtype=dtype,
+        torch_dtype=torch.float32,
     ).to(device)
     model.eval()
-    print(f"[segmentation] Model ready on {device} ({dtype})")
+    print(f"[segmentation] Model ready on {device} (float32)")
     return processor, model
 
 
@@ -64,8 +63,10 @@ def load_auto_pipeline(device: str):
     pipe = pipeline(
         "mask-generation",
         model=MODEL_ID,
-        device=device if device != "mps" else "cpu",  # pipeline MPS 미지원 시 CPU fallback
-        torch_dtype=get_dtype(device),
+        device=device if device != "mps" else "cpu",
+        # float16 환경에서 NMS가 boxes/scores dtype 불일치로 crash → float32 강제
+        torch_dtype=torch.float32,
+        image_processor_kwargs={"use_fast": False},
     )
     print(f"[segmentation] Auto pipeline ready")
     return pipe

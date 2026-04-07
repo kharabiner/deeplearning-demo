@@ -40,7 +40,7 @@ python task_detection.py --image sample.jpg --prompt "person . laptop . bottle .
 python task_segmentation.py --image sample.jpg --mode auto
 python task_vlm.py --image sample.jpg --question "Describe this image."
 python task_depth.py --image sample.jpg
-python task_pose.py --image sample.jpg
+python task_pose.py --image sample.jpg --score-threshold 0.6
 ```
 
 결과는 `outputs/` 폴더에 자동 저장됩니다.

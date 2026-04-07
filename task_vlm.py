@@ -17,15 +17,17 @@ task_vlm.py — Visual Language Model (VQA / Captioning)
 """
 
 import argparse
+import textwrap
 from pathlib import Path
 from typing import Optional, Union
 
+import matplotlib.pyplot as plt
 import torch
 from PIL import Image
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
 
-from common import get_device, get_dtype, load_image
+from common import get_device, get_dtype, load_image, pil_to_numpy, OUTPUTS_DIR
 
 MODEL_ID = "Qwen/Qwen2-VL-2B-Instruct"
 
@@ -172,6 +174,96 @@ def run_multi(
     return results
 
 
+# ── 시각화 ─────────────────────────────────────────────────────────────────────
+def visualize(
+    image: Image.Image,
+    results: list[dict],
+    save_name: str = "vlm_result.png",
+    show: bool = True,
+) -> plt.Figure:
+    """이미지(왼쪽) + Q&A 텍스트(오른쪽) 시각화."""
+    img_np = pil_to_numpy(image)
+    W, H = image.size
+    dpi = 150
+
+    # 상단 타이틀 영역 확보: title_h 인치
+    title_h = 0.35
+    img_h_in = H / dpi
+    fig_w = W * 2 / dpi
+    fig_h = img_h_in + title_h
+
+    fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi, facecolor="white")
+
+    # title_ratio: 타이틀이 전체 높이에서 차지하는 비율
+    title_ratio = title_h / fig_h
+    img_ratio = img_h_in / fig_h
+
+    # 왼쪽 이미지 axes (타이틀 아래)
+    ax_img = fig.add_axes([0.0, 0.0, 0.5, img_ratio])
+    ax_img.imshow(img_np)
+    ax_img.axis("off")
+
+    # 오른쪽 텍스트 axes (타이틀 아래)
+    ax_txt = fig.add_axes([0.5, 0.0, 0.5, img_ratio])
+    ax_txt.set_facecolor("white")
+    ax_txt.axis("off")
+
+    # 공통 타이틀 높이 (figure 좌표)
+    title_y = img_ratio + title_ratio * 0.35
+
+    fig.text(0.25, title_y, "Input Image",
+             ha="center", va="center",
+             fontsize=10, fontweight="bold", color="black")
+    fig.text(0.75, title_y, "Qwen2-VL-2B  Q&A",
+             ha="center", va="center",
+             fontsize=10, fontweight="bold", color="black")
+
+    # 구분선
+    line_y = img_ratio + title_ratio * 0.05
+    fig.add_artist(plt.Line2D([0.01, 0.99], [line_y, line_y],
+                              transform=fig.transFigure,
+                              color="#cccccc", linewidth=0.8))
+    fig.add_artist(plt.Line2D([0.5, 0.5], [0.0, line_y],
+                              transform=fig.transFigure,
+                              color="#cccccc", linewidth=0.8))
+
+    # Q&A 텍스트
+    wrap_width = max(28, int(W / 12))
+    font_q = max(6.0, min(8.5, W / 120))
+    font_a = max(7.0, min(9.5, W / 105))
+    line_h_q = font_q / (img_h_in * dpi) * 1.6
+    line_h_a = font_a / (img_h_in * dpi) * 2.2
+    line_h_qa_gap = line_h_a * 0.9   # Q 끝 ~ A 시작 간격
+    line_h_gap = line_h_a * 2.0      # A 끝 ~ 다음 Q 간격
+
+    y = 0.97  # axes 내부 좌표 (1=top)
+    for i, r in enumerate(results, 1):
+        if y < 0.02:
+            break
+        for line in textwrap.wrap(f"Q{i}: {r['question']}", width=wrap_width):
+            ax_txt.text(0.03, y, line, transform=ax_txt.transAxes,
+                        fontsize=font_q, color="#b8860b",
+                        fontweight="bold", va="top")
+            y -= line_h_q
+        y -= line_h_qa_gap
+        for line in textwrap.wrap(r["answer"], width=wrap_width):
+            if y < 0.02:
+                break
+            ax_txt.text(0.03, y, line, transform=ax_txt.transAxes,
+                        fontsize=font_a, color="black", va="top")
+            y -= line_h_a
+        y -= line_h_gap
+
+    out_path = OUTPUTS_DIR / save_name
+    fig.savefig(out_path, dpi=dpi, bbox_inches=None, facecolor="white")
+    print(f"[saved] {out_path}")
+
+    if show:
+        plt.show()
+
+    return fig
+
+
 # ── 결과 출력 ──────────────────────────────────────────────────────────────────
 def print_results(results: list[dict]) -> None:
     print(f"\n{'═'*60}")
@@ -234,3 +326,4 @@ if __name__ == "__main__":
     results = run_multi(image, processor, model, questions, args.max_tokens, device)
     print_results(results)
     save_results_text(results, save_name=f"{stem}_vlm.txt")
+    visualize(image, results, save_name=f"{stem}_vlm.png")

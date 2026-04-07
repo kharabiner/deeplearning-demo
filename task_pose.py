@@ -23,11 +23,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from PIL import Image
-from transformers import AutoProcessor, AutoModel
+from transformers import AutoProcessor, VitPoseForPoseEstimation
 
 from common import (
     get_device,
-    get_dtype,
     load_image,
     resize_if_needed,
     pil_to_numpy,
@@ -84,9 +83,8 @@ def load_model(device: str):
     """ViTPose processor + model 로드."""
     print(f"[pose] Loading model: {MODEL_ID}")
     processor = AutoProcessor.from_pretrained(MODEL_ID)
-    model = AutoModel.from_pretrained(
+    model = VitPoseForPoseEstimation.from_pretrained(
         MODEL_ID,
-        torch_dtype=get_dtype(device),
     ).to(device)
     model.eval()
     print(f"[pose] Model ready on {device}")
@@ -133,44 +131,30 @@ def run(
     if person_boxes is None or len(person_boxes) == 0:
         person_boxes = [[0, 0, W, H]]
 
+    boxes_list = [[list(map(float, b)) for b in person_boxes]]
+
+    # VitPose processor는 전체 이미지 + boxes를 받아 affine transform 처리
+    inputs = processor(images=image, boxes=boxes_list, return_tensors="pt")
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+    # post_process 내부 scipy.gaussian_filter가 float16 미지원 → float32로 실행
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    # processor의 post_process로 keypoints 디코딩
+    pose_results = processor.post_process_pose_estimation(
+        outputs,
+        boxes=boxes_list,
+    )[0]  # 첫 번째 이미지 결과
+
     results = []
-    for box in person_boxes:
-        x1, y1, x2, y2 = [int(v) for v in box]
-        # 사람 영역 크롭
-        crop = image.crop((x1, y1, x2, y2))
-
-        inputs = processor(images=crop, return_tensors="pt").to(device)
-
-        with torch.no_grad():
-            outputs = model(**inputs)
-
-        # heatmap → keypoints
-        heatmaps = outputs.heatmaps  # (1, 17, H', W')
-        heatmap_np = heatmaps[0].cpu().float().numpy()  # (17, H', W')
-
-        keypoints = []
-        scores = []
-        crop_w, crop_h = crop.size
-        _, hm_h, hm_w = heatmap_np.shape
-
-        for kp_heatmap in heatmap_np:
-            # heatmap에서 argmax로 위치 추출
-            score = float(kp_heatmap.max())
-            flat_idx = int(kp_heatmap.argmax())
-            kp_y = flat_idx // hm_w
-            kp_x = flat_idx % hm_w
-
-            # 크롭 좌표 → 원본 이미지 좌표로 변환
-            orig_x = x1 + kp_x * crop_w / hm_w
-            orig_y = y1 + kp_y * crop_h / hm_h
-
-                keypoints.append([float(orig_x), float(orig_y)])  # float32 명시
-            scores.append(float(score))
-
+    for person, box in zip(pose_results, person_boxes):
+        kps = person["keypoints"].cpu().float().numpy()    # (17, 2) [x, y]
+        scs = person["scores"].cpu().float().numpy()       # (17,)
         results.append({
-            "keypoints": np.array(keypoints, dtype=np.float32),  # float32 명시
-            "scores": np.array(scores, dtype=np.float32),         # float32 명시
-            "box": [x1, y1, x2, y2],
+            "keypoints": kps.astype(np.float32),
+            "scores": scs.astype(np.float32),
+            "box": [float(v) for v in box],
         })
 
     return results
@@ -187,29 +171,28 @@ def visualize(
     """스켈레톤 + 키포인트를 원본 이미지 위에 시각화."""
     img_np = pil_to_numpy(image)
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+    W, H = image.size
+    dpi = 150
+    fig, axes = plt.subplots(
+        1, 2,
+        figsize=(W * 2 / dpi, H / dpi),
+        dpi=dpi,
+    )
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0.01)
 
     axes[0].imshow(img_np)
     axes[0].axis("off")
-    axes[0].set_title("Original", fontsize=12)
 
     axes[1].imshow(img_np)
     axes[1].axis("off")
     n_people = len(results)
-    axes[1].set_title(f"ViTPose — {n_people} person(s)", fontsize=12)
+    axes[1].set_title(f"ViTPose — {n_people} person(s)", fontsize=10,
+                      pad=3, color="white",
+                      bbox=dict(facecolor="black", alpha=0.5, pad=2))
 
     for res in results:
         kps = res["keypoints"]    # (17, 2)
         scs = res["scores"]       # (17,)
-        box = res["box"]
-
-        # BBox
-        x1, y1, x2, y2 = box
-        rect = plt.Rectangle(
-            (x1, y1), x2 - x1, y2 - y1,
-            linewidth=1.5, edgecolor="yellow", facecolor="none",
-        )
-        axes[1].add_patch(rect)
 
         # 스켈레톤 연결선
         for (i, j) in SKELETON_EDGES:
@@ -218,7 +201,7 @@ def visualize(
             x_vals = [kps[i, 0], kps[j, 0]]
             y_vals = [kps[i, 1], kps[j, 1]]
             color = EDGE_COLORS.get((i, j), CENTER_COLOR)
-            axes[1].plot(x_vals, y_vals, "-", color=color, linewidth=2, alpha=0.8)
+            axes[1].plot(x_vals, y_vals, "-", color=color, linewidth=2, alpha=0.85)
 
         # 키포인트 점
         for idx, (x, y) in enumerate(kps):
@@ -227,8 +210,9 @@ def visualize(
             axes[1].plot(x, y, "o", color="white", markersize=5, zorder=5)
             axes[1].plot(x, y, "o", color=CENTER_COLOR, markersize=3, zorder=6)
 
-    plt.tight_layout()
-    save_figure(fig, save_name)
+    out_path = OUTPUTS_DIR / save_name
+    fig.savefig(out_path, dpi=dpi, bbox_inches=None)
+    print(f"[saved] {out_path}")
 
     if show:
         plt.show()

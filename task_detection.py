@@ -22,7 +22,6 @@ from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 from common import (
     get_device,
-    get_dtype,
     load_image,
     resize_if_needed,
     pil_to_numpy,
@@ -41,7 +40,6 @@ def load_model(device: str):
     processor = AutoProcessor.from_pretrained(MODEL_ID)
     model = AutoModelForZeroShotObjectDetection.from_pretrained(
         MODEL_ID,
-        torch_dtype=get_dtype(device),
     ).to(device)
     model.eval()
     print(f"[detection] Model ready on {device}")
@@ -88,15 +86,23 @@ def run(
         return_tensors="pt",
     ).to(device)
 
-    with torch.no_grad():
+    # autocast: CUDA에서 모델 내부 중간 텐서까지 float16으로 일관 처리
+    # torch.set_default_dtype(float32)가 global로 설정돼 있어
+    # 입력 dict만 캐스팅해서는 내부 생성 텐서가 float32로 남아 dtype 불일치 발생
+    autocast_ctx = (
+        torch.autocast(device_type="cuda", dtype=torch.float16)
+        if device == "cuda"
+        else torch.autocast(device_type="cpu", enabled=False)
+    )
+
+    with torch.no_grad(), autocast_ctx:
         outputs = model(**inputs)
 
-    # MPS float64 방지: post_process 내부에서 float64 텐서 생성 가능
     W, H = image.size
+    # transformers 5.x: box_threshold→threshold, input_ids 불필요
     results = processor.post_process_grounded_object_detection(
         outputs,
-        inputs.input_ids,
-        box_threshold=box_threshold,
+        threshold=box_threshold,
         text_threshold=text_threshold,
         target_sizes=[(H, W)],
     )[0]

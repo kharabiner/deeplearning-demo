@@ -22,7 +22,6 @@ from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
 from common import (
     get_device,
-    get_dtype,
     load_image,
     resize_if_needed,
     pil_to_numpy,
@@ -43,7 +42,6 @@ def load_model(device: str):
     processor = AutoImageProcessor.from_pretrained(MODEL_ID)
     model = AutoModelForDepthEstimation.from_pretrained(
         MODEL_ID,
-        torch_dtype=get_dtype(device),
     ).to(device)
     model.eval()
     print(f"[depth] Model ready on {device}")
@@ -74,7 +72,13 @@ def run(
 
     inputs = processor(images=image, return_tensors="pt").to(device)
 
-    with torch.no_grad():
+    autocast_ctx = (
+        torch.autocast(device_type="cuda", dtype=torch.float16)
+        if device == "cuda"
+        else torch.autocast(device_type="cpu", enabled=False)
+    )
+
+    with torch.no_grad(), autocast_ctx:
         outputs = model(**inputs)
         predicted_depth = outputs.predicted_depth  # (1, H', W')
 
