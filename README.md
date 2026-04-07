@@ -1,36 +1,29 @@
 # Deep Learning Assignment — Foundation Model Tasks
 
-Hugging Face foundation model을 활용한 중간/기말 과제 코드입니다.  
-**Windows / Linux / macOS(Apple Silicon M2) 모두 지원합니다.**
+Hugging Face foundation model 기반 중간/기말 과제 코드입니다.
 
 ---
 
-## 빠른 시작 (clone → 실행)
+## 설치 및 실행
 
-```bash
+```cmd
 git clone <repo-url>
 cd deeplearning
 
-# 가상환경 생성 (선택, 권장)
 python -m venv .venv
+.venv\Scripts\activate.bat
 
-# Windows PowerShell (스크립트 실행 정책 오류 시)
-.venv\Scripts\activate.bat          # cmd 방식으로 활성화 (권장)
-# 또는 PowerShell에서 직접 실행:
-# powershell -ExecutionPolicy Bypass -File .venv\Scripts\Activate.ps1
-
-# Linux / macOS
-source .venv/bin/activate
-
-# 패키지 설치 (venv python으로 pip 실행 - Windows 필수)
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# 환경 확인 (device, dtype 출력)
-.venv\Scripts\python.exe common.py
-
-# 테스트 실행 (sample.jpg를 본인 이미지로 교체)
+python common.py
+python task_detection.py --image sample.jpg --prompt "person . laptop . bottle ."
+python task_segmentation.py --image sample.jpg --mode auto
+python task_vlm.py --image sample.jpg --question "Describe this image."
 python task_depth.py --image sample.jpg
+python task_pose.py --image sample.jpg
 ```
+
+결과는 `outputs/` 폴더에 자동 저장됩니다.
 
 ---
 
@@ -38,113 +31,26 @@ python task_depth.py --image sample.jpg
 
 ```
 deeplearning/
-  common.py              # 공통 유틸: device, resize, float32 안전 변환
+  common.py              # 공통 유틸: device 감지, 이미지 로드/resize
   task_detection.py      # Grounding DINO — open-vocab 탐지
   task_segmentation.py   # SAM2 — 픽셀 세그멘테이션
   task_vlm.py            # Qwen2-VL-2B — 이미지 질의응답
   task_depth.py          # Depth Anything V2 — 깊이 추정
   task_pose.py           # ViTPose — 관절 키포인트
   pipeline_final.py      # 기말용: 전체 파이프라인
-  requirements.txt
-  .gitignore
-  outputs/               # 결과 자동 저장 (gitignore 처리됨)
+  outputs/               # 결과 저장 폴더 (git 제외)
 ```
-
----
-
-## 각 태스크 실행 방법
-
-```cmd
-# venv 활성화 (cmd 터미널 기준)
-.venv\Scripts\activate.bat
-
-# 이후 python 명령은 venv 내부로 자동 연결됨
-python common.py
-python task_detection.py --image sample.jpg --prompt "person . laptop . bottle ."
-python task_segmentation.py --image sample.jpg --mode auto
-python task_segmentation.py --image sample.jpg --mode point
-python task_vlm.py --image sample.jpg --question "Describe this image."
-python task_vlm.py --image sample.jpg --qa
-python task_depth.py --image sample.jpg
-python task_pose.py --image sample.jpg
-python pipeline_final.py --image sample.jpg
-```
-
-> **주의 (Windows)**: `pip install` 대신 반드시 아래처럼 venv python으로 실행할 것
-> ```cmd
-> .venv\Scripts\python.exe -m pip install -r requirements.txt
-> ```
-> 일반 `pip install`은 시스템 Python에 설치되어 venv에서 인식 안 됨
-
-결과 이미지는 `outputs/` 폴더에 자동 저장됩니다.
-
----
-
-## 하드웨어 지원
-
-| 환경 | Device | dtype | 비고 |
-|---|---|---|---|
-| NVIDIA RTX 3070 (Windows/Linux) | `cuda` | `float16` | 가장 빠름 |
-| Apple M2 Air (macOS) | `mps` | `float32` | MPS는 float64/float16 미지원 |
-| CPU (어디서나) | `cpu` | `float32` | 느리지만 모든 환경에서 동작 |
-
-`common.py`에서 자동 감지하므로 **코드 수정 없이** 환경에 따라 자동 전환됩니다.
-
-```python
-# common.py 핵심 — MPS float64 방지
-torch.set_default_dtype(torch.float32)  # 전역 float32 강제
-
-def get_device():
-    if torch.cuda.is_available(): return "cuda"
-    if torch.backends.mps.is_available(): return "mps"
-    return "cpu"
-```
-
----
-
-## 이미지 입력 주의사항
-
-- 모든 이미지는 `load_image()` 함수를 통해 로드됩니다
-- **가장 긴 변이 1333px 초과 시 자동 축소** (비율 유지)
-- 너무 큰 이미지는 OOM 또는 처리 시간 초과의 원인이 됩니다
-- 지원 형식: JPG, PNG, WEBP, BMP 등 PIL이 지원하는 모든 형식
 
 ---
 
 ## 사용 모델
 
-| 태스크 | 모델 | HuggingFace ID | 크기 |
-|---|---|---|---|
-| Detection | Grounding DINO base | `IDEA-Research/grounding-dino-base` | ~811MB |
-| Segmentation | SAM2 hiera base+ | `facebook/sam2-hiera-base-plus` | ~320MB |
-| VLM | Qwen2-VL-2B Instruct | `Qwen/Qwen2-VL-2B-Instruct` | ~4GB |
-| Depth | Depth Anything V2 Small | `depth-anything/Depth-Anything-V2-Small-hf` | ~97MB |
-| Pose | ViTPose base | `usyd-community/vitpose-base-simple` | ~330MB |
+| 태스크 | HuggingFace ID | 크기 |
+|---|---|---|
+| Detection | `IDEA-Research/grounding-dino-base` | ~811MB |
+| Segmentation | `facebook/sam2-hiera-base-plus` | ~320MB |
+| VLM | `Qwen/Qwen2-VL-2B-Instruct` | ~4GB |
+| Depth | `depth-anything/Depth-Anything-V2-Small-hf` | ~97MB |
+| Pose | `usyd-community/vitpose-base-simple` | ~330MB |
 
-> 모델은 첫 실행 시 Hugging Face에서 자동 다운로드됩니다.  
-> 다운로드 위치: `~/.cache/huggingface/` (기본값)
-
----
-
-## 트러블슈팅
-
-### MPS 관련 에러 (Apple Silicon)
-```
-RuntimeError: MPS does not support float64
-```
-→ `common.py`의 `torch.set_default_dtype(torch.float32)` 가 적용되어 있는지 확인  
-→ numpy 배열 생성 시 반드시 `dtype=np.float32` 명시
-
-### CUDA OOM (RTX 3070)
-```
-torch.cuda.OutOfMemoryError
-```
-→ `pipeline_final.py`는 모델 간 `del model` + `torch.cuda.empty_cache()` 처리가 되어 있음  
-→ VLM만 단독 실행 시 OOM이면 `--max-tokens` 줄이거나 Qwen2-VL-2B → moondream2로 교체
-
-### Grounding DINO 빌드 오류 (Windows)
-```
-error: Microsoft Visual C++ 14.0 is required
-```
-→ Visual Studio Build Tools 설치: https://visualstudio.microsoft.com/downloads/  
-→ 또는 Conda 환경에서 설치 권장
+모델은 첫 실행 시 자동 다운로드됩니다.
