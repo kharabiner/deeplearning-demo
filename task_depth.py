@@ -96,15 +96,15 @@ def run(
 def depth_to_colormap(
     depth: np.ndarray,
     colormap: str = "plasma",
-    invert: bool = False,
+    invert: bool = True,
 ) -> np.ndarray:
     """
     깊이 맵을 컬러맵 이미지로 변환.
 
-    Depth Anything V2: 값이 클수록 먼 거리
+    Depth Anything V2: 값이 클수록 가까운 거리 (inverse depth)
     plasma colormap: 값이 클수록 warm(노랑/밝음)
-    → invert=False(기본): warm=far, cool=near (자연스러운 매핑)
-    → invert=True: warm=near, cool=far (disparity 스타일)
+    → invert=True(기본): 가까운(큰값)을 뒤집어 cool로, 먼 거리가 warm → warm=far ✓
+    → invert=False: warm=near (직관과 반대)
 
     Returns:
         uint8 NumPy (H, W, 3)
