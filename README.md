@@ -9,12 +9,29 @@ Hugging Face foundation model 기반 중간/기말 과제 코드입니다.
 ```cmd
 git clone <repo-url>
 cd deeplearning
-
 python -m venv .venv
+```
+
+**venv 활성화**
+```cmd
+# Windows
 .venv\Scripts\activate.bat
 
+# Linux / macOS
+source .venv/bin/activate
+```
+
+**패키지 설치**
+```cmd
+# Windows — venv python으로 직접 실행 (일반 pip은 시스템에 설치됨)
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 
+# Linux / macOS
+pip install -r requirements.txt
+```
+
+**실행**
+```cmd
 python common.py
 python task_detection.py --image sample.jpg --prompt "person . laptop . bottle ."
 python task_segmentation.py --image sample.jpg --mode auto
