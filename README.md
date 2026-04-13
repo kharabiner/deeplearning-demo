@@ -65,12 +65,12 @@ deeplearning/
 
 ## 사용 모델
 
-| 태스크 | HuggingFace ID | 크기 |
-|---|---|---|
-| Detection | `IDEA-Research/grounding-dino-base` | ~811MB |
-| Segmentation | `facebook/sam2-hiera-base-plus` | ~320MB |
-| VLM | `Qwen/Qwen2-VL-2B-Instruct` | ~4GB |
-| Depth | `depth-anything/Depth-Anything-V2-Small-hf` | ~97MB |
-| Pose | `usyd-community/vitpose-base-simple` | ~330MB |
+| 태스크 | 모델 이름 | Hugging Face ID | 크기(대략) |
+|--------|-----------|-----------------|------------|
+| Detection | Grounding DINO (base) | `IDEA-Research/grounding-dino-base` | ~811MB |
+| Segmentation | SAM 2 Hiera base+ | `facebook/sam2-hiera-base-plus` | ~320MB |
+| VLM | Qwen2-VL-2B-Instruct | `Qwen/Qwen2-VL-2B-Instruct` | ~4GB |
+| Depth | Depth Anything V2 Small | `depth-anything/Depth-Anything-V2-Small-hf` | ~97MB |
+| Pose | ViTPose base (simple) | `usyd-community/vitpose-base-simple` | ~330MB |
 
-모델은 첫 실행 시 자동 다운로드됩니다.
+모델은 첫 실행 시 Hugging Face Hub에서 자동 다운로드됩니다.
