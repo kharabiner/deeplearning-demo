@@ -27,7 +27,7 @@ outputs/
 .ipynb_checkpoints/
 *.ipynb
 
-# 강의 녹음 텍스트 (개인 자료)
+# 텍스트 (개인 자료)
 *.txt
 
 # OS
