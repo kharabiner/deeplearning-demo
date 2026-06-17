@@ -26,3 +26,12 @@ qwen-vl-utils>=0.0.8
 # task_pose: ViTPose (scipy required for affine transform in image processor)
 timm>=0.9.0
 scipy>=1.10.0
+
+# --- Final: OpenReframe (iOS 27 Spatial Reframing reproduction) ---
+# reframe_app: Gradio interactive UI
+gradio>=4.44.0
+# reframe_inpaint: SD2 inpainting (diffusers) + LaMa
+diffusers>=0.27.0
+# LaMa backend (no token, weights auto-downloaded). If not installed, only the lama backend is disabled.
+simple-lama-inpainting>=0.1.2
+# reframe_core forward-splat warping/preview uses only torch/numpy/opencv (no extra deps)

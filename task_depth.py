@@ -203,7 +203,7 @@ def get_depth_for_masks(
 ) -> list[dict]:
     """
     세그멘테이션 마스크별 평균/중앙값 깊이 계산.
-    pipeline_final.py에서 Detection → Segmentation → Depth 연동 시 사용.
+    Detection → Segmentation → Depth 연동(객체별 깊이 랭킹)에 사용.
 
     Args:
         depth: float32 NumPy (H, W)

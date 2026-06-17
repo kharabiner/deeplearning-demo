@@ -130,6 +130,28 @@ def numpy_to_tensor(array: np.ndarray, device: str) -> torch.Tensor:
     return tensor.to(device)
 
 
+# ── 인페인팅 공용 헬퍼 (remove / expand / reframe 공유) ─────────────────────────
+def mask_to_pil(hole_mask: np.ndarray) -> Image.Image:
+    """bool 마스크 → 흰색(채울 곳)/검정(유지) 8bit 'L' PIL."""
+    return Image.fromarray((np.asarray(hole_mask).astype(np.uint8)) * 255, mode="L")
+
+
+def composite_hole(
+    original: Image.Image, filled: Image.Image, hole_mask: np.ndarray
+) -> Image.Image:
+    """
+    hole 영역만 filled 로 덮고 나머지는 original 유지
+    (애플의 "안 변한 곳은 원본 그대로").
+    """
+    orig = np.asarray(original).astype(np.uint8)
+    fill = np.asarray(filled).astype(np.uint8)
+    if fill.shape != orig.shape:
+        fill = np.asarray(filled.resize(original.size, Image.LANCZOS)).astype(np.uint8)
+    out = orig.copy()
+    out[hole_mask] = fill[hole_mask]
+    return Image.fromarray(out)
+
+
 # ── 결과 저장 ──────────────────────────────────────────────────────────────────
 def save_result(image: Union[Image.Image, np.ndarray], filename: str) -> Path:
     """
