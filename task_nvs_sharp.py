@@ -119,6 +119,17 @@ def load_predictor(device: Optional[str] = None):
     return predictor
 
 
+def unload_predictor() -> None:
+    """SHARP predictor(큰 모델)를 GPU/메모리에서 해제.
+
+    예측은 분석 단계에서 1회뿐이므로, 이후 VLM·SD 인페인팅에 VRAM 을
+    내주기 위해 predict 직후 호출한다(8GB VRAM 대응).
+    """
+    global _PREDICTOR
+    _PREDICTOR = None
+    common.free_memory(common.get_device())
+
+
 # ── 예측 ────────────────────────────────────────────────────────────────────────
 @torch.no_grad()
 def predict(

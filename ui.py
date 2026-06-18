@@ -69,16 +69,19 @@ def build_ui() -> gr.Blocks:
                     btn_clean_up_commit = gr.Button("완료 (제거)", variant="primary")
 
                 with gr.Group(visible=False) as grp_expand:
-                    gr.Markdown("**Expand** — 프레임을 줄여 바깥을 채움")
+                    gr.Markdown(
+                        "**Expand** — LaMa 미리보기 배경 → 슬라이더 조절 → "
+                        "[완료] SD 고품질 생성"
+                    )
                     extend = gr.Slider(
                         1.0, 1.6, 1.0, step=0.02,
                         label="프레임 축소 (1.0=원본, 1.6=최대 확장)",
                     )
-                    btn_expand_commit = gr.Button("완료 (아웃페인팅)", variant="primary")
+                    btn_expand_commit = gr.Button("완료 (SD 생성)", variant="primary")
 
                 with gr.Group(visible=False) as grp_reframe:
-                    gr.Markdown("**Reframe** — 마치 사진을 찍기 전 각도를 바꾸는 것처럼 시점 변경 (SHARP 전용)")
-                    gr.Markdown("💡 슬라이더를 움직이면 **미리보기**로 즉시 확인 (사람/사물은 선명, 바깥은 블러)")
+                    gr.Markdown("**Reframe** — 마치 사진을 찍기 전 각도를 바꾸는 것처럼 시점 변경 (SHARP 단일 루트)")
+                    gr.Markdown("💡 슬라이더를 움직이면 **SHARP 미리보기**(사전 렌더 격자)로 즉시 확인 · 바깥은 블러. [완료]는 정확한 각도로 재렌더 + SD2 생성")
                     yaw = gr.Slider(-16, 16, 0, step=0.5, label="좌우 회전 yaw° (소폭 권장: ±12° 이내)")
                     pitch = gr.Slider(-10, 10, 0, step=0.5, label="상하 회전 pitch° (소폭 권장: ±8° 이내)")
                     btn_reframe_commit = gr.Button("완료 — SD2로 바깥 영역 생성 (로딩 시간 소요)", variant="primary")
@@ -117,6 +120,7 @@ def build_ui() -> gr.Blocks:
         )
 
         # ── Expand ──
+        # 매 틱은 가벼운 작업(블러 배경 재사용 + BILINEAR 축소)이라 .change 로도 부드럽다.
         extend.change(
             expand.expand_view,
             inputs=[st_disp, st_plate, st_img, extend],

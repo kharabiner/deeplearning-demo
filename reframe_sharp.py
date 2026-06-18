@@ -102,9 +102,15 @@ def render_exact(
     out_long: int = 768,
     size_boost: float = 1.6,
     supersample: int = 1,
+    trim_coverage: bool = True,
+    close_holes: bool = True,
     device: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """확정/자유이동용 즉석 렌더 (격자 밖 각도·평행이동 지원)."""
+    """확정/자유이동용 즉석 렌더 (격자 밖 각도·평행이동 지원).
+
+    trim_coverage=True 는 테두리의 약한 알파 커버리지를 미커버로 깎는다.
+    확정 인페인팅에서는 False 로 두어야 ~coverage(빈 곳)가 과대평가되지 않는다.
+    """
     device = device or common.get_device()
     if scene.width >= scene.height:
         W = out_long
@@ -114,6 +120,6 @@ def render_exact(
         W = max(1, round(out_long * scene.width / scene.height))
     return splat_render.render(
         scene, move, out_hw=(H, W), pivot_z=pivot_z, size_boost=size_boost,
-        trim_coverage=True, close_holes=True,
+        trim_coverage=trim_coverage, close_holes=close_holes,
         supersample=supersample, device=device,
     )

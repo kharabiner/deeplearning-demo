@@ -7,7 +7,6 @@ features/shared.py — 세 기능(clean up / expand / reframe) 공용 글루 코
   - DEVICE / 렌더 상수
   - HIDDEN / VISIBLE : Gradio update 헬퍼
   - vlm_caption / vlm_caption_reframe : Qwen2-VL → SD 인페인팅 프롬프트
-  - depth_disp : Depth Anything V2 → 정규화 disparity
   - inpaint_commit : SD2 인페인팅 실행 래퍼
   - feather_composite : 채운 영역을 원본에 부드럽게 합성
   - resize_mask : bool 마스크 크기 변경
@@ -22,7 +21,6 @@ from PIL import Image
 from common import (
     get_device, free_memory, pil_to_numpy, numpy_to_pil,
 )
-import reframe_core as core
 import inpaint as rinp
 
 DEVICE = get_device()
@@ -77,33 +75,41 @@ def vlm_caption_reframe(image: Image.Image) -> str:
         return "seamless natural background extension, same scene, photorealistic"
 
 
-# ── 깊이 → disparity ────────────────────────────────────────────────────────────
-def depth_disp(image: Image.Image) -> np.ndarray:
-    """Depth Anything V2 → [0,1] 정규화 disparity."""
-    import task_depth_depthanythingv2 as task_depth
-    proc, model = task_depth.load_model(DEVICE)
-    depth = task_depth.run(image, proc, model, DEVICE)
-    del proc, model
-    free_memory(DEVICE)
-    return core.normalize_disparity(depth)
+# ── 인페인팅 실행 (확정 공용) ───────────────────────────────────────────────────
+def inpaint_commit(
+    image_pil, fill, progress, desc="인페인팅",
+    prompt=None, caption_fn=None, backend="sd2", sd_guidance=7.5,
+):
+    """인페인팅 실행. (결과 PIL, 상태 메시지) 반환.
 
-
-# ── SD2 인페인팅 실행 (확정 공용) ───────────────────────────────────────────────
-def inpaint_commit(image_pil, fill, progress, desc="인페인팅"):
-    """SD2 인페인팅 전용 (VLM 프롬프트). (결과 PIL, 상태 메시지) 반환."""
+    backend="lama" : 프롬프트 없이 주변 맥락으로 채움 (Expand 아웃페인팅 권장)
+    backend="sd2"  : SD 1.5 인페인팅 + 텍스트 프롬프트 (Clean Up 등)
+    """
     if int(fill.sum()) < 30:
         return image_pil, "완료 · 채울 영역 없음"
 
-    prompt = vlm_caption(image_pil)
-    progress(0.6, desc=f"{desc} — SD2")
+    if backend == "lama":
+        progress(0.6, desc=f"{desc} — LaMa")
+        try:
+            inp = rinp.get_inpainter("lama", DEVICE)
+            result = inp.inpaint(image_pil, fill)
+            inp.unload()
+        except Exception as e:
+            raise gr.Error(f"{desc} 실패(LaMa): {e}")
+        return result, f"완료 · LaMa(프롬프트 없음, 주변 맥락) · 우상단 아이콘으로 다운로드"
+
+    if prompt is None:
+        prompt = (caption_fn or vlm_caption)(image_pil)
+    progress(0.6, desc=f"{desc} — SD")
     try:
         inp = rinp.get_inpainter("sd2", DEVICE)
-        result = inp.inpaint(image_pil, fill, prompt=prompt)
+        result = inp.inpaint(image_pil, fill, prompt=prompt, guidance=sd_guidance)
         inp.unload()
     except Exception as e:
-        raise gr.Error(f"{desc} 실패(SD2): {e}")
+        raise gr.Error(f"{desc} 실패(SD): {e}")
 
-    return result, f"완료 · SD2 · prompt={prompt[:50]} · 우상단 아이콘으로 다운로드"
+    prompt_label = "(없음, 이미지 맥락)" if prompt == "" else prompt[:50]
+    return result, f"완료 · SD · prompt={prompt_label} · 우상단 아이콘으로 다운로드"
 
 
 # ── 합성/마스크 헬퍼 ────────────────────────────────────────────────────────────
@@ -130,3 +136,34 @@ def resize_mask(mask: np.ndarray, H: int, W: int) -> np.ndarray:
     return np.array(
         Image.fromarray(mask.astype(np.uint8) * 255).resize((W, H), Image.NEAREST)
     ).astype(bool)
+
+
+def dilate_mask(mask: np.ndarray, iterations: int = 2) -> np.ndarray:
+    """인페인팅 경계를 깔끔하게 하려 마스크를 살짝 팽창 (cv2 없으면 그대로)."""
+    try:
+        import cv2
+        kernel = np.ones((3, 3), np.uint8)
+        return cv2.dilate(mask.astype(np.uint8), kernel, iterations=iterations).astype(bool)
+    except Exception:
+        return mask
+
+
+def blur_holes(rgb: np.ndarray, hole_mask: np.ndarray, blur_sigma: float = 12.0) -> np.ndarray:
+    """드래그 중 바깥(빈) 영역만 뿌옇게 — 중앙(피사체) 선명도는 유지."""
+    if not hole_mask.any():
+        return rgb
+    out = rgb.copy()
+    try:
+        import cv2
+        soft = cv2.GaussianBlur(rgb, (0, 0), blur_sigma)
+        out[hole_mask] = soft[hole_mask]
+        return out
+    except Exception:
+        k, pad = 11, 5
+        padded = np.pad(out, ((pad, pad), (pad, pad), (0, 0)), mode="edge").astype(np.float32)
+        acc = np.zeros_like(out, dtype=np.float32)
+        for dy in range(k):
+            for dx in range(k):
+                acc += padded[dy:dy + out.shape[0], dx:dx + out.shape[1]]
+        out[hole_mask] = (acc / (k * k)).astype(np.uint8)[hole_mask]
+        return out

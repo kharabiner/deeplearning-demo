@@ -119,6 +119,29 @@ def _trim_disocclusion_coverage(coverage: np.ndarray, alpha: np.ndarray) -> np.n
     return cov
 
 
+def _despeckle_coverage(coverage: np.ndarray, min_density: float = 0.5,
+                        ksize: Optional[int] = None) -> np.ndarray:
+    """점박이(저밀도 스플랫) 픽셀을 '미커버'로 재분류.
+
+    회전으로 늘어난/디오클루전 가장자리에서 가우시안이 듬성듬성 찍히면
+    '그려진 점 + 빈틈'이 섞인 점박이가 된다. 이 점들은 covered 로 잡혀
+    이후 hole 채움(telea/SD2)에서 제외되어 그대로 남는다.
+    국소 커버리지 밀도가 낮은 covered 픽셀을 hole 로 돌려, 솔리드 영역만 남긴다.
+    """
+    try:
+        import cv2
+    except Exception:
+        return coverage
+    H, W = coverage.shape
+    if ksize is None:
+        ksize = max(5, (min(H, W) // 64) | 1)   # 홀수 커널
+    density = cv2.blur(coverage.astype(np.float32), (ksize, ksize))
+    speckle = coverage & (density < float(min_density))
+    if not speckle.any():
+        return coverage
+    return coverage & (~speckle)
+
+
 def _close_small_holes(rgb: np.ndarray, coverage: np.ndarray):
     """내부 구멍(occlusion 경계 점박이/디오클루전)은 주변색으로 메우고, 이미지
     테두리에 닿는 '바깥 영역'만 구멍으로 남긴다(→ 앱에서 블러/아웃페인팅).
@@ -366,9 +389,11 @@ def render(
         depth_mean[written] = zsum_a[written] / wsum_a[written]
         depth = depth_mean.reshape(H, W).cpu().numpy()
         if close_holes:
+            coverage = _despeckle_coverage(coverage)
             rgb, coverage = _close_small_holes(rgb, coverage)
         return rgb, coverage, depth, alpha_map
     if close_holes:
+        coverage = _despeckle_coverage(coverage)
         rgb, coverage = _close_small_holes(rgb, coverage)
     return rgb, coverage
 

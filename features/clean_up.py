@@ -17,11 +17,10 @@ import numpy as np
 from PIL import Image
 
 from common import free_memory, pil_to_numpy, numpy_to_pil, resize_if_needed
-import reframe_core as core
 import inpaint as rinp
 from .shared import (
     DEVICE, PREVIEW_MAX, HIDDEN, VISIBLE,
-    vlm_caption, feather_composite,
+    vlm_caption, feather_composite, dilate_mask,
 )
 
 
@@ -203,7 +202,7 @@ def clean_up_commit(img_np, mask, progress=gr.Progress()):
     if mask is None or not mask.any():
         return gr.skip(), gr.skip(), gr.skip(), "먼저 지울 객체를 브러시로 선택하세요."
 
-    fill = core.dilate_mask(mask, iterations=6)
+    fill = dilate_mask(mask, iterations=6)
     orig_pil = numpy_to_pil(img_np)
     progress(0.35, desc="Clean Up — 객체 제거 중")
 

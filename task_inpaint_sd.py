@@ -29,7 +29,12 @@ from common import get_device, get_dtype, free_memory, mask_to_pil, composite_ho
 MODEL_ID = "stable-diffusion-v1-5/stable-diffusion-inpainting"
 
 DEFAULT_PROMPT = "seamless natural background, photorealistic, high quality, sharp focus"
-NEGATIVE_PROMPT = "blurry, distorted, artifacts, watermark, text, low quality, deformed"
+# 아웃페인팅/제거 공용: 빈 영역에 새 사람·객체가 생성되지 않도록 강하게 억제
+NEGATIVE_PROMPT = (
+    "person, people, human, man, woman, child, face, body, crowd, "
+    "new object, duplicate, extra limbs, "
+    "blurry, distorted, artifacts, watermark, text, low quality, deformed"
+)
 
 
 class SDInpainter:
@@ -68,7 +73,9 @@ class SDInpainter:
         if self.pipe is None:
             self.load()
 
-        prompt = prompt or DEFAULT_PROMPT
+        # prompt=None → 기본 프롬프트, prompt="" → 텍스트 없이 이미지·마스크 맥락만
+        if prompt is None:
+            prompt = DEFAULT_PROMPT
         mask = mask_to_pil(hole_mask)
 
         # SD 는 입력을 8의 배수로 요구 → 512 기준 리사이즈 후 원복

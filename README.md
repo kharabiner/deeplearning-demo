@@ -13,14 +13,12 @@ git clone https://github.com/kharabiner/deeplearning-demo.git
 cd deeplearning-demo
 ```
 
-(로컬 폴더 이름은 `deeplearning`으로 바꿔도 됩니다.)
-
 ---
 
 ## Installation guide
 
-1. **Python** 3.10 이상 권장  
-2. **가상환경 생성:** `python -m venv .venv`  
+1. **Python** 3.10 이상 권장
+2. **가상환경 생성:** `python -m venv .venv`
 3. **가상환경 활성화**
 
 ```cmd
@@ -31,7 +29,7 @@ cd deeplearning-demo
 source .venv/bin/activate
 ```
 
-4. **의존성 설치**
+1. **의존성 설치**
 
 ```cmd
 # Windows — 반드시 venv의 python으로 설치 (시스템 pip 혼동 방지)
@@ -41,7 +39,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-5. **SHARP 설치 (Reframe용, 선택이지만 권장)**
+1. **SHARP 설치**
 
 ```cmd
 # Windows
@@ -53,10 +51,10 @@ bash scripts/setup_sharp.sh
 
 가중치는 최초 Reframe 실행 시 공개 URL에서 자동 다운로드됩니다(토큰 불필요).
 
-6. **GPU (선택)**  
-   - NVIDIA: CUDA용 PyTorch가 설치된 환경이면 자동으로 `cuda` 사용  
-   - Apple Silicon: `mps` 사용 (float32)  
-   - 그 외: `cpu`
+1. **GPU (선택)**
+  - NVIDIA: CUDA용 PyTorch가 설치된 환경이면 자동으로 `cuda` 사용  
+  - Apple Silicon: `mps` 사용 (float32)  
+  - 그 외: `cpu`
 
 ---
 
@@ -77,31 +75,32 @@ python app.py --share    # 외부 공유 링크
 
 - **Clean Up (지우기)**: 브러시로 문질러서 지우고 싶은 객체를 선택하면 SAM2로 자동 세그멘테이션 후 AI가 제거. 텍스트 검색으로도 객체 선택 가능.
 - **Expand (확장)**: 사진 프레임을 축소하여 바깥 영역을 AI로 자연스럽게 확장. 슬라이더로 실시간 미리보기.
-- **Reframe (시점 변경)**: 마치 사진을 찍기 전에 카메라 각도를 바꾸는 것처럼 시점 변경. Reframe 버튼을 누르면 SHARP 3D 분석 + LDI 전경/사람 레이어 분리(로딩). 이후 슬라이더로 각도 조정 시 실시간 미리보기에서 사람·사물은 깔끔히 회전하고 바깥쪽은 블러로 표시. [완료] 버튼으로 SHARP 고품질 렌더 + 바깥 영역을 SD2로 생성.
-
-
+- **Reframe (시점 변경)**: 마치 사진을 찍기 전에 카메라 각도를 바꾸는 것처럼 시점 변경. **SHARP 단일 루트**로, Reframe 버튼을 누르면 SHARP 3D 분석 + yaw×pitch 격자 사전 렌더(로딩). 이후 슬라이더로 각도 조정 시 가장 가까운 격자 프레임을 즉시 미리보기(바깥쪽은 블러). [완료] 버튼으로 정확한 각도에서 SHARP 고품질 재렌더 + 바깥 영역을 SD2로 생성. 미리보기와 확정이 모두 SHARP라 결과가 일치한다(소폭 각도 ±12° 이내 권장).
 
 ### 사용 파운데이션 모델
 
-| 모델 | HF ID / 출처 | 역할 |
-|------|----------------|------|
-| Depth Anything V2 | `depth-anything/Depth-Anything-V2-Small-hf` | 뎁스 → 3D 워핑 (Reframe) |
-| SAM2 | `facebook/sam2-hiera-base-plus` | Clean Up 세그멘테이션 |
-| Grounding DINO | `IDEA-Research/grounding-dino-base` | Clean Up 텍스트 검색 |
-| Qwen2-VL-2B | `Qwen/Qwen2-VL-2B-Instruct` | SD 인페인팅 프롬프트 (VLM) |
-| LaMa / SD1.5 Inpaint | `simple-lama-inpainting` / `stable-diffusion-v1-5/stable-diffusion-inpainting` | 인페인팅 (객체 제거 및 영역 생성) |
-| Apple SHARP | `apple/ml-sharp` + 공개 체크포인트 | Reframe 3D Gaussian 렌더링 |
+
+| 모델                   | HF ID / 출처                                                                     | 역할                      |
+| -------------------- | ------------------------------------------------------------------------------ | ----------------------- |
+| Apple SHARP          | `apple/ml-sharp` + 공개 체크포인트                                                    | Reframe 3D Gaussian 생성·렌더 |
+| SAM2                 | `facebook/sam2-hiera-base-plus`                                                | Clean Up 세그멘테이션         |
+| Grounding DINO       | `IDEA-Research/grounding-dino-base`                                            | Clean Up 텍스트 검색         |
+| Qwen2-VL-2B          | `Qwen/Qwen2-VL-2B-Instruct`                                                    | SD 인페인팅 프롬프트 (VLM)      |
+| SD1.5 Inpaint        | `stable-diffusion-v1-5/stable-diffusion-inpainting`                            | 인페인팅 (Clean Up 제거·Expand/Reframe 바깥 생성) |
+
+> 참고: Depth Anything V2(`task_depth_depthanythingv2.py`)와 LaMa(`task_inpaint_lama.py`)는 단독 task 스크립트로 포함되어 있으나, 현재 OpenEdit 앱 파이프라인(Clean Up·Expand·Reframe)에서는 사용하지 않습니다(Expand는 순수 아웃페인팅, Reframe는 SHARP 단일 루트).
+
 
 ### Device
 
 - **CUDA** (NVIDIA): 권장, 전 기능 고성능
 - **MPS** (Apple Silicon): Clean Up/Expand/Reframe 동작 (float32)
-- **CPU**: Clean Up/Expand만 동작(느림). Reframe은 SHARP 미설치 시 depth 폴백
+- **CPU**: Clean Up/Expand만 권장(느림). Reframe은 SHARP 격자 사전 렌더가 매우 느릴 수 있음(GPU 권장)
 
 ### 성능 팁
 
-- **Reframe 성능**: SHARP 설치 시 최고 품질. 미설치 시 depth 워핑 사용 (빠르지만 품질 낮음).
-- **인페인팅 백엔드**: `lama` (빠름, 단순한 채움), `sd2` (VLM 프롬프트 사용, 고품질), `opencv` (가장 빠름, 기본 채움).
+- **Reframe(SHARP 단일 루트)**: 분석 단계에서 yaw×pitch 격자를 사전 렌더하므로 로딩이 다소 걸린다(GPU에서 수초). 드래그는 격자 최근접 프레임이라 즉시 표시되고, [완료]만 정확한 각도로 재렌더한다. 격자 밀도/해상도는 `features/reframe.py` 의 `GRID_*` 상수로 조절.
+- **인페인팅 백엔드**: `sd2` (VLM 프롬프트 사용, 고품질, 기본값), `lama` (빠름, 단순한 채움, Expand LDI 플레이트용), `opencv` (가장 빠름, 폴백).
 - **각도 조정**: Reframe에서 소폭 각도 변경(±12° 이내) 권장. 큰 각도는 왜곡 발생 가능.
 
 ---
@@ -119,7 +118,7 @@ python task_depth_depthanythingv2.py --image sample.jpg
 python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 ```
 
-결과는 **`outputs/`** 폴더에 저장됩니다(저장소에는 `.gitignore`로 제외 — 로컬에서 실행 시 생성). `python <script> --help` 로 옵션을 확인할 수 있습니다.
+결과는 `**outputs/**` 폴더에 저장됩니다(저장소에는 `.gitignore`로 제외 — 로컬에서 실행 시 생성). `python <script> --help` 로 옵션을 확인할 수 있습니다.
 
 ---
 
@@ -129,83 +128,97 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 
 ### `common.py`
 
-| | |
-|--|--|
-| **역할** | 모든 `task_*.py`가 공유하는 유틸리티: 디바이스(`cuda` / `mps` / `cpu`) 선택, 이미지 로드, 긴 변 기준 자동 resize, 결과 저장 경로(`outputs/`), MPS에서 float64 방지 등. |
-| **입력 (Input)** | 직접 “과제 입력 이미지”를 받지 않음. 다른 스크립트가 `load_image(path)` 등으로 호출할 때 **이미지 파일 경로** 또는 PIL `Image`가 간접 입력. |
-| **출력 (Output)** | 콘솔에 환경 요약(`device_info()`). 그림 저장은 각 `task_*.py`가 `save_figure` / `save_result`로 처리. |
-| **예시** | `python common.py` → 현재 머신의 device·dtype·출력 폴더 경로 출력. |
+
+|                 |                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **역할**          | 모든 `task_*.py`가 공유하는 유틸리티: 디바이스(`cuda` / `mps` / `cpu`) 선택, 이미지 로드, 긴 변 기준 자동 resize, 결과 저장 경로(`outputs/`), MPS에서 float64 방지 등. |
+| **입력 (Input)**  | 직접 “과제 입력 이미지”를 받지 않음. 다른 스크립트가 `load_image(path)` 등으로 호출할 때 **이미지 파일 경로** 또는 PIL `Image`가 간접 입력.                               |
+| **출력 (Output)** | 콘솔에 환경 요약(`device_info()`). 그림 저장은 각 `task_*.py`가 `save_figure` / `save_result`로 처리.                                            |
+| **예시**          | `python common.py` → 현재 머신의 device·dtype·출력 폴더 경로 출력.                                                                           |
+
 
 ---
 
 ### `task_detection_groundingdino.py` — Grounding DINO (open-vocabulary detection)
 
-| | |
-|--|--|
-| **입력 (Input)** | **`--image`** 필수: RGB 이미지 파일 경로. **`--prompt`**: 찾을 객체를 영어로 마침표+공백으로 구분 (예: `person . laptop .`). 선택: `--box-threshold`, `--text-threshold`, `--no-show`. |
-| **출력 (Output)** | **콘솔:** 탐지된 클래스·점수·박스 좌표. **파일:** 원본과 탐지 결과를 나란히 그린 PNG. |
-| **예시 결과 (Example results)** | `python task_detection_groundingdino.py --image sample.jpg --prompt "person . laptop ."` 실행 후 **`outputs/sample_detection.png`** 생성. |
+
+|                             |                                                                                                                                                           |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **입력 (Input)**              | `**--image`** 필수: RGB 이미지 파일 경로. `**--prompt**`: 찾을 객체를 영어로 마침표+공백으로 구분 (예: `person . laptop .`). 선택: `--box-threshold`, `--text-threshold`, `--no-show`. |
+| **출력 (Output)**             | **콘솔:** 탐지된 클래스·점수·박스 좌표. **파일:** 원본과 탐지 결과를 나란히 그린 PNG.                                                                                                  |
+| **예시 결과 (Example results)** | `python task_detection_groundingdino.py --image sample.jpg --prompt "person . laptop ."` 실행 후 `**outputs/sample_detection.png`** 생성.                      |
+
 
 ---
 
 ### `task_segmentation_sam2.py` — SAM 2 (mask generation)
 
-| | |
-|--|--|
-| **입력 (Input)** | **`--image`** 필수. **`--mode`**: `auto`(이미지 전체 자동 마스크) 또는 `point`(이미지 중앙 한 점을 전경으로 세그멘테이션). **`--no-show`**: 창만 끄고 저장만. |
-| **출력 (Output)** | **콘솔:** 마스크 개수, 면적, score. **파일:** 마스크를 색으로 겹친 시각화 PNG. |
-| **예시 결과 (Example results)** | `python task_segmentation_sam2.py --image sample.jpg --mode auto` → **`outputs/sample_seg_auto.png`**. ` --mode point` → **`outputs/sample_seg_point.png`**. |
+
+|                             |                                                                                                                                                             |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **입력 (Input)**              | `**--image`** 필수. `**--mode**`: `auto`(이미지 전체 자동 마스크) 또는 `point`(이미지 중앙 한 점을 전경으로 세그멘테이션). `**--no-show**`: 창만 끄고 저장만.                                      |
+| **출력 (Output)**             | **콘솔:** 마스크 개수, 면적, score. **파일:** 마스크를 색으로 겹친 시각화 PNG.                                                                                                     |
+| **예시 결과 (Example results)** | `python task_segmentation_sam2.py --image sample.jpg --mode auto` → `**outputs/sample_seg_auto.png`**. `--mode point` → `**outputs/sample_seg_point.png**`. |
+
 
 ---
 
 ### `task_vlm_qwen2vl.py` — Qwen2-VL-2B (image Q&A)
 
-| | |
-|--|--|
-| **입력 (Input)** | **`--image`** 필수. **`--question`**: 이미지에 대한 한 줄 질문(영어 권장). **`--qa`**: 기본 질문 여러 개를 연속 실행. **`--max-tokens`**: 생성 최대 토큰. |
-| **출력 (Output)** | **콘솔:** 질문·답변 텍스트. **파일:** (1) Q&A 전체 텍스트 **`.txt`**, (2) 왼쪽 입력 이미지·오른쪽 Q&A 패널 **`.png`**. |
-| **예시 결과 (Example results)** | `python task_vlm_qwen2vl.py --image sample.jpg --question "What is in this image?"` 실행 후 **`outputs/sample_vlm.txt`**, **`outputs/sample_vlm.png`**. |
+
+|                             |                                                                                                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **입력 (Input)**              | `**--image`** 필수. `**--question**`: 이미지에 대한 한 줄 질문(영어 권장). `**--qa**`: 기본 질문 여러 개를 연속 실행. `**--max-tokens**`: 생성 최대 토큰.                              |
+| **출력 (Output)**             | **콘솔:** 질문·답변 텍스트. **파일:** (1) Q&A 전체 텍스트 `**.txt`**, (2) 왼쪽 입력 이미지·오른쪽 Q&A 패널 `**.png**`.                                                           |
+| **예시 결과 (Example results)** | `python task_vlm_qwen2vl.py --image sample.jpg --question "What is in this image?"` 실행 후 `**outputs/sample_vlm.txt`**, `**outputs/sample_vlm.png**`. |
+
 
 ---
 
 ### `task_depth_depthanythingv2.py` — Depth Anything V2 Small (monocular depth)
 
-| | |
-|--|--|
-| **입력 (Input)** | **`--image`** 필수. 선택: **`--colormap`**(기본 `plasma`), **`--no-show`**. |
-| **출력 (Output)** | **콘솔:** 깊이 맵 통계 등. **파일:** 왼쪽 원본·오른쪽 깊이 맵(컬러바; 값이 클수록 모델 기준 “가까움” 쪽). |
-| **예시 결과 (Example results)** | `python task_depth_depthanythingv2.py --image sample.jpg` → **`outputs/sample_depth.png`**. |
+
+|                             |                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| **입력 (Input)**              | `**--image`** 필수. 선택: `**--colormap**`(기본 `plasma`), `**--no-show**`.                       |
+| **출력 (Output)**             | **콘솔:** 깊이 맵 통계 등. **파일:** 왼쪽 원본·오른쪽 깊이 맵(컬러바; 값이 클수록 모델 기준 “가까움” 쪽).                       |
+| **예시 결과 (Example results)** | `python task_depth_depthanythingv2.py --image sample.jpg` → `**outputs/sample_depth.png`**. |
+
 
 ---
 
 ### `task_pose_vitpose.py` — ViTPose (human keypoints)
 
-| | |
-|--|--|
-| **입력 (Input)** | **`--image`** 필수(사람이 보이는 장면). 선택: **`--score-threshold`**(낮은 신뢰도 관절 숨김, 기본 0.3), **`--no-show`**. BBox를 넘기지 않으면 **이미지 전체를 한 명**으로 가정. |
-| **출력 (Output)** | **콘솔:** 사람별 보이는 키포인트 수. **파일:** 원본 + 스켈레톤 오버레이 PNG. |
-| **예시 결과 (Example results)** | `python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6` → **`outputs/sample_pose.png`**. |
+
+|                             |                                                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **입력 (Input)**              | `**--image`** 필수(사람이 보이는 장면). 선택: `**--score-threshold**`(낮은 신뢰도 관절 숨김, 기본 0.3), `**--no-show**`. BBox를 넘기지 않으면 **이미지 전체를 한 명**으로 가정. |
+| **출력 (Output)**             | **콘솔:** 사람별 보이는 키포인트 수. **파일:** 원본 + 스켈레톤 오버레이 PNG.                                                                                   |
+| **예시 결과 (Example results)** | `python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6` → `**outputs/sample_pose.png`**.                               |
+
 
 ---
 
 ### `pipeline_final.py` (미구현)
 
-기말 통합 데모는 **`app.py` (OpenEdit)** 를 사용하세요. 개별 `task_*.py` 테스트는 아래 Run 섹션 참고.
+기말 통합 데모는 `**app.py` (OpenEdit)** 를 사용하세요. 개별 `task_*.py` 테스트는 아래 Run 섹션 참고.
 
 ---
 
 ### 요약 표 (스크립트 ↔ 예시 출력 파일, `sample.jpg` 기준)
 
-| Script | Example command | Example output files under `outputs/` |
-|--------|-----------------|----------------------------------------|
-| `task_detection_groundingdino.py` | `--image sample.jpg --prompt "person ."` | `sample_detection.png` |
-| `task_segmentation_sam2.py` | `--image sample.jpg --mode auto` | `sample_seg_auto.png` |
-| `task_segmentation_sam2.py` | `--image sample.jpg --mode point` | `sample_seg_point.png` |
-| `task_vlm_qwen2vl.py` | `--image sample.jpg --question "Describe this image."` | `sample_vlm.txt`, `sample_vlm.png` |
-| `task_depth_depthanythingv2.py` | `--image sample.jpg` | `sample_depth.png` |
-| `task_pose_vitpose.py` | `--image sample.jpg` | `sample_pose.png` |
 
-**“Three codes of foundation models”:** 서로 다른 foundation model을 쓰는 **`task_*.py`가 5개**이므로 최소 3개 요건을 충족합니다.
+| Script                            | Example command                                        | Example output files under `outputs/` |
+| --------------------------------- | ------------------------------------------------------ | ------------------------------------- |
+| `task_detection_groundingdino.py` | `--image sample.jpg --prompt "person ."`               | `sample_detection.png`                |
+| `task_segmentation_sam2.py`       | `--image sample.jpg --mode auto`                       | `sample_seg_auto.png`                 |
+| `task_segmentation_sam2.py`       | `--image sample.jpg --mode point`                      | `sample_seg_point.png`                |
+| `task_vlm_qwen2vl.py`             | `--image sample.jpg --question "Describe this image."` | `sample_vlm.txt`, `sample_vlm.png`    |
+| `task_depth_depthanythingv2.py`   | `--image sample.jpg`                                   | `sample_depth.png`                    |
+| `task_pose_vitpose.py`            | `--image sample.jpg`                                   | `sample_pose.png`                     |
+
+
+**“Three codes of foundation models”:** 서로 다른 foundation model을 쓰는 `**task_*.py`가 5개**이므로 최소 3개 요건을 충족합니다.
 
 ---
 
@@ -246,12 +259,14 @@ deeplearning/
 
 ## 사용 모델
 
-| 태스크 | 모델 이름 | Hugging Face ID | 크기(대략) |
-|--------|-----------|-----------------|------------|
-| Detection | Grounding DINO (base) | `IDEA-Research/grounding-dino-base` | ~811MB |
-| Segmentation | SAM 2 Hiera base+ | `facebook/sam2-hiera-base-plus` | ~320MB |
-| VLM | Qwen2-VL-2B-Instruct | `Qwen/Qwen2-VL-2B-Instruct` | ~4GB |
-| Depth | Depth Anything V2 Small | `depth-anything/Depth-Anything-V2-Small-hf` | ~97MB |
-| Pose | ViTPose base (simple) | `usyd-community/vitpose-base-simple` | ~330MB |
+
+| 태스크          | 모델 이름                   | Hugging Face ID                             | 크기(대략) |
+| ------------ | ----------------------- | ------------------------------------------- | ------ |
+| Detection    | Grounding DINO (base)   | `IDEA-Research/grounding-dino-base`         | ~811MB |
+| Segmentation | SAM 2 Hiera base+       | `facebook/sam2-hiera-base-plus`             | ~320MB |
+| VLM          | Qwen2-VL-2B-Instruct    | `Qwen/Qwen2-VL-2B-Instruct`                 | ~4GB   |
+| Depth        | Depth Anything V2 Small | `depth-anything/Depth-Anything-V2-Small-hf` | ~97MB  |
+| Pose         | ViTPose base (simple)   | `usyd-community/vitpose-base-simple`        | ~330MB |
+
 
 모델은 첫 실행 시 Hugging Face Hub에서 자동 다운로드됩니다.
