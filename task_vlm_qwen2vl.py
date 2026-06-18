@@ -1,16 +1,16 @@
 """
-task_vlm.py — Visual Language Model (VQA / Captioning)
+task_vlm_qwen2vl.py — Visual Language Model (VQA / Captioning)
 모델: Qwen2-VL-2B-Instruct (Qwen/Qwen2-VL-2B-Instruct)
 
 사용법:
     # 기본 이미지 설명
-    python task_vlm.py --image sample.jpg
+    python task_vlm_qwen2vl.py --image sample.jpg
 
     # 커스텀 질문
-    python task_vlm.py --image sample.jpg --question "이 이미지에서 이상한 점은?"
+    python task_vlm_qwen2vl.py --image sample.jpg --question "이 이미지에서 이상한 점은?"
 
     # 여러 질문 연속
-    python task_vlm.py --image sample.jpg --qa
+    python task_vlm_qwen2vl.py --image sample.jpg --qa
 
 동작:
     이미지 + 텍스트 질문 → 자연어 답변 생성

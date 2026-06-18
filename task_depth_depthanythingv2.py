@@ -1,9 +1,9 @@
 """
-task_depth.py — Monocular Depth Estimation
+task_depth_depthanythingv2.py — Monocular Depth Estimation
 모델: Depth Anything V2 Small (depth-anything/Depth-Anything-V2-Small-hf)
 
 사용법:
-    python task_depth.py --image sample.jpg
+    python task_depth_depthanythingv2.py --image sample.jpg
 
 동작:
     이미지 1장 → 각 픽셀의 상대적 깊이(거리) 추정 → 컬러 깊이 맵 시각화

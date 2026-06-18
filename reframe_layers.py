@@ -47,45 +47,23 @@ class Layers:
 
 
 # ── 사람 검출 + 마스크 ──────────────────────────────────────────────────────────
-SAM2_MODEL_ID = "facebook/sam2-hiera-base-plus"
-
-
 def _sam2_masks(image: Image.Image, boxes: np.ndarray, device: str) -> List[np.ndarray]:
-    """
-    박스별 SAM2 마스크 (transformers 5.x API).
-    박스마다 3개 후보 중 IoU 최고를 선택.
-    """
-    import torch
-    from transformers import Sam2Processor, Sam2Model
+    """박스별 SAM2 마스크 — task_segmentation 재사용."""
+    import task_segmentation_sam2 as seg
 
-    proc = Sam2Processor.from_pretrained(SAM2_MODEL_ID)
-    model = Sam2Model.from_pretrained(SAM2_MODEL_ID, torch_dtype=torch.float32).to(device).eval()
-
-    box_list = [[float(x) for x in b] for b in boxes]
-    inputs = proc(images=image, input_boxes=[box_list], return_tensors="pt")
-    inputs = {
-        k: (v.to(device).float() if torch.is_floating_point(v) else v.to(device))
-        for k, v in inputs.items()
-    }
-    with torch.no_grad():
-        out = model(**inputs)
-
-    masks = proc.post_process_masks(out.pred_masks.cpu(), inputs["original_sizes"].cpu())[0]
-    iou = out.iou_scores.cpu()[0]  # (num_boxes, num_masks)
-
-    result = []
-    for i in range(masks.shape[0]):
-        best = int(iou[i].argmax())
-        result.append(masks[i, best].numpy().astype(bool))
-
-    del proc, model
-    free_memory(device)
-    return result
+    proc, model = seg.load_model(device)
+    try:
+        boxes_list = boxes.tolist() if hasattr(boxes, "tolist") else list(boxes)
+        results = seg.run_with_boxes(image, proc, model, boxes_list, device=device)
+        return [r["mask"] for r in results]
+    finally:
+        del proc, model
+        free_memory(device)
 
 
 def _detect_person_masks(image: Image.Image, device: str, box_threshold: float = 0.3):
     """Grounding DINO(person) → SAM2 마스크. 무거운 모델은 쓰고 바로 해제."""
-    import task_detection
+    import task_detection_groundingdino as task_detection
 
     dproc, dmodel = task_detection.load_model(device)
     det = task_detection.run(
@@ -282,7 +260,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     from common import load_image, save_result
-    import task_depth
+    import task_depth_depthanythingv2 as task_depth
 
     parser = argparse.ArgumentParser(description="빌보드 레이어링 워핑 테스트")
     parser.add_argument("--image", type=str, required=True)

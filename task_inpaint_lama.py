@@ -3,7 +3,7 @@ task_inpaint_lama.py — Image Inpainting
 모델: LaMa (big-lama, via simple-lama-inpainting)
 
 프롬프트 없이 주변 맥락만으로 빈 곳을 채운다. 빠르고 헛것을 그리지 않아
-배경이 단순할 때 깔끔하다 (remove / expand / reframe 모두에서 사용).
+배경이 단순할 때 깔끔하다 (clean up / expand / reframe 모두에서 사용).
 
 설치: pip install simple-lama-inpainting  (토큰 불필요, 가중치 자동 다운로드)
 

@@ -130,7 +130,7 @@ def numpy_to_tensor(array: np.ndarray, device: str) -> torch.Tensor:
     return tensor.to(device)
 
 
-# ── 인페인팅 공용 헬퍼 (remove / expand / reframe 공유) ─────────────────────────
+# ── 인페인팅 공용 헬퍼 (clean up / expand / reframe 공유) ─────────────────────────
 def mask_to_pil(hole_mask: np.ndarray) -> Image.Image:
     """bool 마스크 → 흰색(채울 곳)/검정(유지) 8bit 'L' PIL."""
     return Image.fromarray((np.asarray(hole_mask).astype(np.uint8)) * 255, mode="L")

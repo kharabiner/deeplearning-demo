@@ -28,18 +28,12 @@ import numpy as np
 import torch
 
 import common
-from reframe_core import CameraMove
+from reframe_core import CameraMove, rotation_matrix
 from task_nvs_sharp import SharpScene
 
 
-# ── 회전 행렬 (reframe_core 와 동일 규약: Rx @ Ry) ───────────────────────────────
 def _rotation(yaw_deg: float, pitch_deg: float, device, dtype) -> torch.Tensor:
-    yaw, pitch = np.deg2rad(yaw_deg), np.deg2rad(pitch_deg)
-    cy, sy = np.cos(yaw), np.sin(yaw)
-    cx, sx = np.cos(pitch), np.sin(pitch)
-    Ry = torch.tensor([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]], device=device, dtype=dtype)
-    Rx = torch.tensor([[1, 0, 0], [0, cx, -sx], [0, sx, cx]], device=device, dtype=dtype)
-    return Rx @ Ry
+    return rotation_matrix(yaw_deg, pitch_deg, device, dtype)
 
 
 def _linear_to_srgb(c: torch.Tensor) -> torch.Tensor:
@@ -109,16 +103,17 @@ def _polish_disocclusion(
 
 
 def _trim_disocclusion_coverage(coverage: np.ndarray, alpha: np.ndarray) -> np.ndarray:
-    """신뢰 낮은 픽셀은 미커버로 표시 → 프리뷰 블러·commit 인페인팅 대상."""
+    """테두리(회전 시 새로 드러난 영역)만 미커버 처리.
+
+    내부(얼굴·피사체)의 약한 알파까지 구멍으로 치면 프리뷰 블러가
+    전체 사진을 흐리게 만든다 → 테두리만 제외.
+    """
     H, W = coverage.shape
     margin = max(16, min(H, W) // 20)
     border = np.zeros((H, W), dtype=bool)
     border[:margin, :] = border[-margin:, :] = True
     border[:, :margin] = border[:, -margin:] = True
-    interior = ~border
-    bad = np.zeros((H, W), dtype=bool)
-    bad |= interior & coverage & (alpha < 0.25)
-    bad |= border & coverage & (alpha < 0.42)
+    bad = border & coverage & (alpha < 0.42)
     cov = coverage.copy()
     cov[bad] = False
     return cov
@@ -171,14 +166,15 @@ def render(
     *,
     out_hw: Optional[Tuple[int, int]] = None,
     pivot_z: Optional[float] = None,
-    size_boost: float = 2.2,
-    max_radius: int = 6,
+    size_boost: float = 1.6,
+    max_radius: int = 5,
     opacity_thresh: float = 0.02,
     depth_band: float = 0.05,
     aa_blur: float = 0.5,
     close_holes: bool = True,
-    polish: bool = True,
+    polish: bool = False,
     supersample: int = 1,
+    trim_coverage: bool = False,
     coverage_thresh: float = 1e-6,
     return_depth: bool = False,
     device: Optional[str] = None,
@@ -364,7 +360,7 @@ def render(
         rgb = cv2.resize(rgb, (Wo, Ho), interpolation=cv2.INTER_AREA)
         coverage = cv2.resize(coverage.astype(np.uint8), (Wo, Ho), interpolation=cv2.INTER_AREA) > 127
         alpha_map = cv2.resize(alpha_map.astype(np.float32), (Wo, Ho), interpolation=cv2.INTER_AREA)
-    coverage = _trim_disocclusion_coverage(coverage, alpha_map)
+    coverage = _trim_disocclusion_coverage(coverage, alpha_map) if trim_coverage else coverage
     if return_depth:
         depth_mean = torch.zeros(npix, device=device, dtype=dtype)
         depth_mean[written] = zsum_a[written] / wsum_a[written]

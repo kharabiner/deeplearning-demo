@@ -1,17 +1,17 @@
 """
-task_segmentation.py — Pixel-level Segmentation
+task_segmentation_sam2.py — Pixel-level Segmentation
 모델: SAM2 hiera base+ (facebook/sam2-hiera-base-plus)
 출처: Hugging Face — transformers 라이브러리 사용 (별도 sam2 패키지 불필요)
 
 사용법:
     # BBox 기반 (Detection 결과 연동)
-    python task_segmentation.py --image sample.jpg --mode bbox
+    python task_segmentation_sam2.py --image sample.jpg --mode bbox
 
     # 이미지 중앙 포인트 클릭 예시
-    python task_segmentation.py --image sample.jpg --mode point
+    python task_segmentation_sam2.py --image sample.jpg --mode point
 
     # 이미지 전체 자동 분할
-    python task_segmentation.py --image sample.jpg --mode auto
+    python task_segmentation_sam2.py --image sample.jpg --mode auto
 
 동작:
     BBox 또는 포인트 힌트 → 픽셀 단위 마스크 생성 + 시각화
@@ -72,6 +72,57 @@ def load_auto_pipeline(device: str):
     return pipe
 
 
+def _to_device_inputs(inputs: dict, device: str) -> dict:
+    return {
+        k: v.to(device).to(torch.float32) if v.dtype == torch.float64 else v.to(device)
+        for k, v in inputs.items()
+    }
+
+
+def _postprocess_masks(
+    processor: Sam2Processor,
+    outputs,
+    inputs: dict,
+    *,
+    obj_idx: int = 0,
+    all_candidates: bool = False,
+) -> list[dict]:
+    """SAM2 마스크 후처리 — transformers 4.x / 5.x 모두 지원."""
+    if "reshaped_input_sizes" in inputs:
+        masks, scores, _ = processor.post_process_masks(
+            outputs.pred_masks.cpu(),
+            inputs["original_sizes"].cpu(),
+            inputs["reshaped_input_sizes"].cpu(),
+        )
+        if all_candidates:
+            out = [
+                {"mask": masks[0][i].numpy().astype(bool), "score": float(scores[0][i])}
+                for i in range(masks[0].shape[0])
+            ]
+        else:
+            best = int(scores[0].argmax())
+            out = [{"mask": masks[0][best].numpy().astype(bool), "score": float(scores[0][best])}]
+        out.sort(key=lambda x: x["score"], reverse=True)
+        return out
+
+    proc_masks = processor.post_process_masks(
+        outputs.pred_masks.cpu(),
+        inputs["original_sizes"].cpu(),
+    )
+    iou = outputs.iou_scores.cpu()[0, obj_idx]
+    n_cand = proc_masks[0].shape[1]
+    indices = range(n_cand) if all_candidates else [int(iou.argmax())]
+    out = [
+        {
+            "mask": proc_masks[0][obj_idx, i].numpy().astype(bool),
+            "score": float(iou[i]),
+        }
+        for i in indices
+    ]
+    out.sort(key=lambda x: x["score"], reverse=True)
+    return out
+
+
 # ── BBox 기반 추론 ─────────────────────────────────────────────────────────────
 def run_with_boxes(
     image: Image.Image,
@@ -105,27 +156,12 @@ def run_with_boxes(
             input_boxes=[[box]],   # [[[x1,y1,x2,y2]]] — (batch, num_boxes, 4)
             return_tensors="pt",
         )
-        # float32 강제 (MPS float64 방지)
-        inputs = {
-            k: v.to(device).to(torch.float32) if v.dtype == torch.float64
-            else v.to(device)
-            for k, v in inputs.items()
-        }
+        inputs = _to_device_inputs(inputs, device)
 
         with torch.no_grad():
             outputs = model(**inputs)
 
-        masks, scores, _ = processor.post_process_masks(
-            outputs.pred_masks.cpu(),
-            inputs["original_sizes"].cpu(),
-            inputs["reshaped_input_sizes"].cpu(),
-        )
-        # masks[0]: (num_masks, H, W)  scores[0]: (num_masks,)
-        best_idx = scores[0].argmax().item()
-        results.append({
-            "mask": masks[0][best_idx].numpy().astype(bool),
-            "score": float(scores[0][best_idx]),
-        })
+        results.extend(_postprocess_masks(processor, outputs, inputs))
 
     return results
 
@@ -155,34 +191,52 @@ def run_with_points(
 
     inputs = processor(
         images=image,
-        input_points=[points],   # (batch, num_points, 2)
-        input_labels=[point_labels],
+        input_points=[[points]],       # (batch, object, point, coords)
+        input_labels=[[point_labels]],
         return_tensors="pt",
     )
-    inputs = {
-        k: v.to(device).to(torch.float32) if v.dtype == torch.float64
-        else v.to(device)
-        for k, v in inputs.items()
-    }
+    inputs = _to_device_inputs(inputs, device)
 
     with torch.no_grad():
         outputs = model(**inputs)
 
-    masks, scores, _ = processor.post_process_masks(
-        outputs.pred_masks.cpu(),
-        inputs["original_sizes"].cpu(),
-        inputs["reshaped_input_sizes"].cpu(),
+    return _postprocess_masks(processor, outputs, inputs, all_candidates=True)
+
+
+def run_with_stroke_mask(
+    image: Image.Image,
+    processor: Sam2Processor,
+    model: Sam2Model,
+    stroke_mask: np.ndarray,
+    device: Optional[str] = None,
+) -> list[dict]:
+    """브러시 획 마스크 → bbox 또는 중심점으로 SAM2 정제."""
+    if device is None:
+        device = next(model.parameters()).device.type
+
+    mask = stroke_mask.astype(bool)
+    ys, xs = np.where(mask)
+    if len(xs) == 0:
+        return []
+
+    H, W = mask.shape
+    if len(xs) >= 12:
+        pad = 8
+        x0 = max(0, int(xs.min()) - pad)
+        y0 = max(0, int(ys.min()) - pad)
+        x1 = min(W, int(xs.max()) + 1 + pad)
+        y1 = min(H, int(ys.max()) + 1 + pad)
+        results = run_with_boxes(
+            image, processor, model, [[x0, y0, x1, y1]], device=device,
+        )
+        if results:
+            return results
+
+    cx, cy = int(xs.mean()), int(ys.mean())
+    return run_with_points(
+        image, processor, model,
+        points=[[cx, cy]], point_labels=[1], device=device,
     )
-
-    results = []
-    for mask, score in zip(masks[0], scores[0]):
-        results.append({
-            "mask": mask.numpy().astype(bool),
-            "score": float(score),
-        })
-
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results
 
 
 # ── 자동 마스크 생성 ───────────────────────────────────────────────────────────

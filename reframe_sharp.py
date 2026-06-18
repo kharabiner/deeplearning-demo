@@ -1,14 +1,13 @@
 """
-reframe_sharp.py — SHARP 생성형 Reframe (격자 사전 렌더 + 최근접 조회)
+reframe_sharp.py — SHARP 생성형 Reframe (확정 렌더)
 
-iOS Reframe UX 재현:
-  - [분석] 단계에서 SHARP가 3DGS를 1회 생성한 뒤, yaw×pitch 각도 격자를
-    splat_render 로 미리 다 렌더해 캐시한다(= iOS의 "잠깐 대기").
-  - 드래그 중에는 슬라이더 각도에 가장 가까운 캐시 프레임을 즉시 보여준다(0ms).
-    → 실시간 GS 렌더러(gsplat, CUDA 전용 빌드) 없이도 매끄러운 드래그.
-  - 새로 드러난 바깥/구멍은 coverage 마스크로 표시 → 드래그 중 블러, 확정 시 인페인팅.
+앱(app.py) 파이프라인:
+  - [분석] SHARP predict → 3DGS 1회 생성
+  - [드래그] depth warp 미리보기 (선명도 유지, iOS 방식 블러)
+  - [확정] render_exact → photo anchor → 인페인팅
 
-각도 범위 밖 자유 이동(truck/pedestal/dolly)이나 정밀 확정은 render_exact 로 즉석 렌더.
+build_grid / ReframeGrid 는 오프라인·향후용(앱 미사용). 드래그 중 즉시 GS 렌더 대신
+depth warp 프리뷰를 쓴다(SHARP splat 전체가 뿌옇게 보이는 문제 회피).
 """
 
 from __future__ import annotations
@@ -48,7 +47,8 @@ def build_grid(
     n_yaw: int = 11,
     n_pitch: int = 5,
     out_long: int = 640,
-    size_boost: float = 2.2,
+    size_boost: float = 1.6,
+    close_holes: bool = False,
     supersample: int = 1,
     device: Optional[str] = None,
     progress=None,
@@ -80,6 +80,7 @@ def build_grid(
             rgb, cov = splat_render.render(
                 scene, CameraMove(yaw_deg=float(y), pitch_deg=float(p)),
                 out_hw=(H, W), pivot_z=pivot_z, size_boost=size_boost,
+                trim_coverage=False, close_holes=close_holes,
                 supersample=supersample, device=device,
             )
             row_img.append(rgb)
@@ -99,7 +100,7 @@ def render_exact(
     *,
     pivot_z: float,
     out_long: int = 768,
-    size_boost: float = 2.2,
+    size_boost: float = 1.6,
     supersample: int = 1,
     device: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -113,5 +114,6 @@ def render_exact(
         W = max(1, round(out_long * scene.width / scene.height))
     return splat_render.render(
         scene, move, out_hw=(H, W), pivot_z=pivot_z, size_boost=size_boost,
+        trim_coverage=True, close_holes=True,
         supersample=supersample, device=device,
     )

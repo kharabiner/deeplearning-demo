@@ -1,9 +1,9 @@
 """
-task_pose.py — Human Pose Estimation
+task_pose_vitpose.py — Human Pose Estimation
 모델: ViTPose base (usyd-community/vitpose-base-simple)
 
 사용법:
-    python task_pose.py --image sample.jpg
+    python task_pose_vitpose.py --image sample.jpg
 
 동작:
     사람이 포함된 이미지 → 관절 17개 키포인트 추정 → 스켈레톤 시각화

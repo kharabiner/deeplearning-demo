@@ -1,9 +1,9 @@
 """
-task_detection.py — Open-Vocabulary Object Detection
+task_detection_groundingdino.py — Open-Vocabulary Object Detection
 모델: Grounding DINO base (IDEA-Research/grounding-dino-base)
 
 사용법:
-    python task_detection.py --image sample.jpg --prompt "person . laptop . bottle ."
+    python task_detection_groundingdino.py --image sample.jpg --prompt "person . laptop . bottle ."
 
 동작:
     텍스트 프롬프트로 원하는 객체를 자유롭게 지정 → Bounding Box + 레이블 시각화

@@ -239,7 +239,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     from common import load_image, save_result, free_memory
-    import task_depth
+    import task_depth_depthanythingv2 as task_depth
 
     parser = argparse.ArgumentParser(description="LDI 워핑 테스트")
     parser.add_argument("--image", type=str, required=True)

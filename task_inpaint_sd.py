@@ -3,8 +3,8 @@ task_inpaint_sd.py — Generative Image Inpainting
 모델: Stable Diffusion Inpainting (stable-diffusion-v1-5/stable-diffusion-inpainting)
 
 텍스트 프롬프트로 채울 내용을 유도하는 생성형 인페인팅.
-배경이 복잡하거나 새 콘텐츠가 필요할 때 유리하며, Qwen2-VL(task_vlm) 캡션을
-프롬프트로 받으면 VLM 기여가 결과로 드러난다 (remove / expand / reframe 공용).
+배경이 복잡하거나 새 콘텐츠가 필요할 때 유리하며, Qwen2-VL(task_vlm_qwen2vl) 캡션을
+프롬프트로 받으면 VLM 기여가 결과로 드러난다 (clean up / expand / reframe 공용).
 
 * stabilityai/stable-diffusion-2-inpainting 은 게이트로 전환 → 비게이트 SD1.5
   인페인팅 사용 (토큰 불필요, 512 네이티브).

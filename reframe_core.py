@@ -63,6 +63,11 @@ def _rotation_matrix(yaw_deg: float, pitch_deg: float, device, dtype) -> torch.T
     return Rx @ Ry
 
 
+def rotation_matrix(yaw_deg: float, pitch_deg: float, device, dtype) -> torch.Tensor:
+    """공개 API — splat_render 등에서 동일 yaw/pitch 규약으로 사용."""
+    return _rotation_matrix(yaw_deg, pitch_deg, device, dtype)
+
+
 # ── 뎁스 → disparity → z ────────────────────────────────────────────────────────
 def normalize_disparity(depth: np.ndarray) -> np.ndarray:
     """
@@ -370,24 +375,74 @@ def warp_image(
     return warped, hole_mask
 
 
+def composite_photo_anchor(
+    image: np.ndarray,
+    disparity: np.ndarray,
+    yaw: float,
+    pitch: float,
+    splat_rgb: np.ndarray,
+    _splat_cov: np.ndarray,
+    z_near: float = 1.0,
+    z_far: float = 6.0,
+    device: Optional[str] = None,
+) -> np.ndarray:
+    """원본 사진 픽셀을 depth warp로 유지하고, 디오클루전만 SHARP splat으로 채움.
+
+    SHARP splat 전체를 쓰면 ~60만 Gaussian 재합성이라 원본 대비 선명도·색이 떨어진다.
+    보이던 표면은 사진을 3D로 재투영하고, 가려졌다 드러난 곳만 splat을 쓴다.
+    """
+    if abs(float(yaw)) < 0.5 and abs(float(pitch)) < 0.5:
+        return image
+    move = CameraMove(yaw_deg=float(yaw), pitch_deg=float(pitch))
+    warped, hole = warp_image(
+        image, disparity, move, z_near=z_near, z_far=z_far,
+        smooth=False, device=device,
+    )
+    if not hole.any():
+        return warped
+    out = warped.copy()
+    out[hole] = splat_rgb[hole]
+    return out
+
+
+def preview_holes(hole_mask: np.ndarray) -> np.ndarray:
+    """프리뷰용: 이미지 테두리와 연결된 구멍만 (내부 점박이는 블러하지 않음)."""
+    try:
+        import cv2
+    except Exception:
+        return hole_mask
+
+    H, W = hole_mask.shape
+    m = hole_mask.astype(np.uint8)
+    if m.sum() == 0:
+        return hole_mask
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+    border = np.zeros_like(m)
+    for i in range(1, n):
+        x, y = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP]
+        w, h = stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
+        if (x == 0) or (y == 0) or (x + w >= W) or (y + h >= H):
+            border[labels == i] = 1
+    return border.astype(bool)
+
+
 # ── 프리뷰용 빠른 빈칸 채움 (애플의 "드래그 중 블러") ───────────────────────────
-def fill_preview(warped: np.ndarray, hole_mask: np.ndarray, blur: int = 21) -> np.ndarray:
+def fill_preview(warped: np.ndarray, hole_mask: np.ndarray, blur_sigma: float = 12.0) -> np.ndarray:
     """
-    실시간 드래그 중 보여줄 가벼운 프리뷰.
-    인페인팅 대신 주변 색을 블러로 흘려 빈 곳을 메운다 (애플의 가장자리 블러와 동일 컨셉).
-    OpenCV가 있으면 Telea inpaint(빠름), 없으면 단순 박스 블러 합성.
+    드래그 중 바깥(테두리) 구멍만 뿌옇게 — Telea 인페인팅은 주변까지 번져 전체가 흐려짐.
+    구멍 픽셀만 블러 색으로 교체해 중앙(피사체) 선명도 유지.
     """
+    if not hole_mask.any():
+        return warped
     out = warped.copy()
     try:
         import cv2
 
-        mask_u8 = (hole_mask.astype(np.uint8)) * 255
-        if mask_u8.any():
-            out = cv2.inpaint(out, mask_u8, 3, cv2.INPAINT_TELEA)
+        soft = cv2.GaussianBlur(warped, (0, 0), blur_sigma)
+        out[hole_mask] = soft[hole_mask]
         return out
     except Exception:
-        # OpenCV 미설치 폴백: 블러본으로 구멍만 덮기
-        k = max(3, blur | 1)
+        k = 11
         pad = k // 2
         padded = np.pad(out, ((pad, pad), (pad, pad), (0, 0)), mode="edge").astype(np.float32)
         acc = np.zeros_like(out, dtype=np.float32)
@@ -397,6 +452,17 @@ def fill_preview(warped: np.ndarray, hole_mask: np.ndarray, blur: int = 21) -> n
         blurred = (acc / (k * k)).astype(np.uint8)
         out[hole_mask] = blurred[hole_mask]
         return out
+
+
+def sharpen_rgb(rgb: np.ndarray, sigma: float = 0.8, amount: float = 0.5) -> np.ndarray:
+    """표시용 경미한 언샤프(렌더 softening 보정)."""
+    try:
+        import cv2
+    except Exception:
+        return rgb
+    f = rgb.astype(np.float32)
+    blur = cv2.GaussianBlur(rgb, (0, 0), sigma)
+    return np.clip(f + amount * (f - blur.astype(np.float32)), 0, 255).astype(np.uint8)
 
 
 def dilate_mask(mask: np.ndarray, iterations: int = 2) -> np.ndarray:
@@ -416,7 +482,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     from common import load_image, pil_to_numpy, get_device, save_result
-    import task_depth
+    import task_depth_depthanythingv2 as task_depth
 
     parser = argparse.ArgumentParser(description="OpenReframe core — quick warp test")
     parser.add_argument("--image", type=str, required=True)
