@@ -1,13 +1,11 @@
 """
 task_inpaint_sd.py — Generative Image Inpainting
-모델: Stable Diffusion Inpainting (stable-diffusion-v1-5/stable-diffusion-inpainting)
+모델: SDXL Inpainting (diffusers/stable-diffusion-xl-1.0-inpainting-0.1)
 
-텍스트 프롬프트로 채울 내용을 유도하는 생성형 인페인팅.
-배경이 복잡하거나 새 콘텐츠가 필요할 때 유리하며, Qwen2-VL(task_vlm_qwen2vl) 캡션을
-프롬프트로 받으면 VLM 기여가 결과로 드러난다 (clean up / expand / reframe 공용).
+1024px 네이티브 · 큰 마스크(아웃페인팅)에 SD1.5보다 적합.
+텍스트 프롬프트로 채울 내용을 유도하는 생성형 인페인팅 (clean up / expand / reframe 공용).
 
-* stabilityai/stable-diffusion-2-inpainting 은 게이트로 전환 → 비게이트 SD1.5
-  인페인팅 사용 (토큰 불필요, 512 네이티브).
+8GB VRAM: fp16 + attention/vae slicing (순차 load/unload 필수).
 
 사용법(단독):
     python task_inpaint_sd.py --image sample.jpg --prompt "wooden floor"
@@ -26,10 +24,10 @@ from PIL import Image
 
 from common import get_device, get_dtype, free_memory, mask_to_pil, composite_hole
 
-MODEL_ID = "stable-diffusion-v1-5/stable-diffusion-inpainting"
+MODEL_ID = "diffusers/stable-diffusion-xl-1.0-inpainting-0.1"
+INPAINT_LONG = 1024   # SDXL 네이티브 해상도(긴 변) — 512 대비 아웃페인팅 품질↑
 
 DEFAULT_PROMPT = "seamless natural background, photorealistic, high quality, sharp focus"
-# 아웃페인팅/제거 공용: 빈 영역에 새 사람·객체가 생성되지 않도록 강하게 억제
 NEGATIVE_PROMPT = (
     "person, people, human, man, woman, child, face, body, crowd, "
     "new object, duplicate, extra limbs, "
@@ -37,8 +35,24 @@ NEGATIVE_PROMPT = (
 )
 
 
+def _align8(n: int) -> int:
+    return max(8, (int(round(n)) // 8) * 8)
+
+
+def _resize_for_inpaint(image: Image.Image, mask: Image.Image, long: int = INPAINT_LONG):
+    """SDXL 입력: 긴 변 long, 8의 배수. (리사이즈 PIL, 원본 W,H) 반환."""
+    W, H = image.size
+    scale = long / max(W, H)
+    rw, rh = _align8(W * scale), _align8(H * scale)
+    return (
+        image.resize((rw, rh), Image.LANCZOS),
+        mask.resize((rw, rh), Image.NEAREST),
+        W, H,
+    )
+
+
 class SDInpainter:
-    """Stable Diffusion Inpainting. prompt 로 채울 내용을 유도."""
+    """SDXL Inpainting. prompt 로 채울 내용을 유도."""
 
     def __init__(self, device: Optional[str] = None):
         self.device = device or get_device()
@@ -47,13 +61,17 @@ class SDInpainter:
     def load(self):
         from diffusers import AutoPipelineForInpainting
 
-        print(f"[inpaint:sd] Loading {MODEL_ID}")
+        print(f"[inpaint:sdxl] Loading {MODEL_ID}")
         dtype = get_dtype(self.device)
-        self.pipe = AutoPipelineForInpainting.from_pretrained(MODEL_ID, torch_dtype=dtype)
-        self.pipe = self.pipe.to(self.device)
-        if self.device == "cuda":           # 8GB VRAM 안전장치
+        kwargs = {"torch_dtype": dtype, "use_safetensors": True}
+        if self.device == "cuda":
+            kwargs["variant"] = "fp16"
+        self.pipe = AutoPipelineForInpainting.from_pretrained(MODEL_ID, **kwargs)
+        if self.device == "cuda":
             self.pipe.enable_attention_slicing()
-        print(f"[inpaint:sd] ready on {self.device} ({dtype})")
+            self.pipe.enable_vae_slicing()
+        self.pipe = self.pipe.to(self.device)
+        print(f"[inpaint:sdxl] ready on {self.device} ({dtype}) · long={INPAINT_LONG}")
         return self
 
     def unload(self):
@@ -73,20 +91,14 @@ class SDInpainter:
         if self.pipe is None:
             self.load()
 
-        # prompt=None → 기본 프롬프트, prompt="" → 텍스트 없이 이미지·마스크 맥락만
         if prompt is None:
             prompt = DEFAULT_PROMPT
         mask = mask_to_pil(hole_mask)
+        img_r, mask_r, W, H = _resize_for_inpaint(image, mask)
 
-        # SD 는 입력을 8의 배수로 요구 → 512 기준 리사이즈 후 원복
-        W, H = image.size
-        scale = 512 / max(W, H)
-        rw, rh = max((int(round(W * scale)) // 8) * 8, 8), max((int(round(H * scale)) // 8) * 8, 8)
-
-        img_r = image.resize((rw, rh), Image.LANCZOS)
-        mask_r = mask.resize((rw, rh), Image.NEAREST)
+        gen_dev = self.device if self.device in ("cuda", "mps") else "cpu"
         generator = (
-            torch.Generator(device=self.device).manual_seed(seed) if seed is not None else None
+            torch.Generator(device=gen_dev).manual_seed(seed) if seed is not None else None
         )
 
         result = self.pipe(
@@ -99,11 +111,9 @@ class SDInpainter:
             generator=generator,
         ).images[0].resize((W, H), Image.LANCZOS)
 
-        # 채울 곳만 합성 (원본 픽셀은 그대로)
         return composite_hole(image, result, hole_mask)
 
 
-# ── 모델 로드 헬퍼 (task_* 컨벤션) ──────────────────────────────────────────────
 def load_model(device: str) -> SDInpainter:
     return SDInpainter(device).load()
 
@@ -113,14 +123,13 @@ def run(image: Image.Image, model: SDInpainter, hole_mask: np.ndarray,
     return model.inpaint(image, hole_mask, prompt=prompt)
 
 
-# ── CLI: 가운데 사각형을 지워 생성 채움 데모 ────────────────────────────────────
 if __name__ == "__main__":
     import argparse
     from pathlib import Path
 
     from common import load_image, save_result
 
-    parser = argparse.ArgumentParser(description="SD inpainting 데모")
+    parser = argparse.ArgumentParser(description="SDXL inpainting 데모")
     parser.add_argument("--image", type=str, required=True)
     parser.add_argument("--prompt", type=str, default=None)
     parser.add_argument("--box", type=float, default=0.25)
@@ -140,5 +149,5 @@ if __name__ == "__main__":
     inp.unload()
 
     stem = Path(args.image).stem
-    save_result(out, f"{stem}_sd.png")
+    save_result(out, f"{stem}_sdxl.png")
     print("완료 → outputs/ 확인")

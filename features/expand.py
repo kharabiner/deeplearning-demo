@@ -6,7 +6,7 @@ iOS 27 "Expand" 재현: 사진 프레임을 축소해 바깥쪽 여백을 노출
 
   - 분석(1회): LaMa 로 최대 확장 미리보기 배경 생성 (프롬프트 없음, 주변 맥락)
   - 드래그: LaMa 배경을 슬라이더와 같이 줌 + 원본 축소·페더 합성 (가벼움)
-  - [완료]: SD 인페인팅(프롬프트 없음, guidance=1) — LaMa 배경을 맥락으로 디테일 업
+  - [완료]: SD 입력만 검은 캔버스+원본 (LaMa 미포함) — 미리보기와 분리
 
 UI 흐름:
   expand_analyze → (슬라이더) expand_view → expand_commit
@@ -21,12 +21,16 @@ from PIL import Image
 from common import pil_to_numpy, numpy_to_pil, resize_if_needed
 from .shared import (
     PREVIEW_MAX, HIDDEN, VISIBLE,
-    inpaint_commit, dilate_mask,
+    inpaint_commit, dilate_mask, feather_composite,
 )
 
 BACKDROP_SIGMA = 24.0   # LaMa 시드용 가우시안 블러(분석 1회)
 FEATHER_FRAC = 0.025    # 선명/배경 경계 페더 폭(이미지 짧은 변 대비)
 MAX_EXTEND = 1.6        # LaMa 미리보기 배경 생성 기준(슬라이더 최대와 일치)
+
+# SDXL 확정용 — 장면 묘사 없이 최소만 (빈 프롬프트+guidance 1 은 검은 출력 유발)
+EXPAND_SDXL_PROMPT = "high quality photograph, seamless natural background continuation"
+EXPAND_SDXL_GUIDANCE = 4.0
 
 
 def _make_backdrop(img_np: np.ndarray) -> np.ndarray:
@@ -171,7 +175,7 @@ def expand_view(_disp, backdrop, img_np, extend):
     return _view(img_np, backdrop, extend)
 
 
-# ── 3) 확정 (SD 고품질 생성 — LaMa 배경을 맥락으로) ────────────────────────────
+# ── 3) 확정 (SDXL — LaMa 맥락 + 최소 프롬프트) ───────────────────────────────────
 def expand_commit(_disp, backdrop, img_np, extend, progress=gr.Progress()):
     if img_np is None:
         raise gr.Error("먼저 Expand를 실행하세요.")
@@ -181,11 +185,16 @@ def expand_commit(_disp, backdrop, img_np, extend, progress=gr.Progress()):
         progress(0.1, desc="LaMa 배경 생성")
         backdrop = _lama_backdrop(img_np, progress)
     progress(0.2, desc="프레임 확장")
+    # SDXL 입력: 줌된 LaMa 배경(가장자리 맥락) + 선명 원본
+    # 검은 캔버스 + guidance 1 은 SDXL 이 마스크를 채우지 않고 검은색 유지함
     bd = _scaled_lama_backdrop(backdrop, extend, fast=False)
     canvas, outer = _compose(img_np, extend, backdrop=bd, fast=False)
-    fill = dilate_mask(outer, iterations=3)
-    return inpaint_commit(
-        numpy_to_pil(canvas), fill, progress,
+    fill = dilate_mask(outer, iterations=2)
+    canvas_pil = numpy_to_pil(canvas)
+    result_pil, msg = inpaint_commit(
+        canvas_pil, fill, progress,
         desc="아웃페인팅", backend="sd2",
-        prompt="", sd_guidance=1.0,   # 텍스트 없이 LaMa 맥락만 디테일 업
+        prompt=EXPAND_SDXL_PROMPT, sd_guidance=EXPAND_SDXL_GUIDANCE,
     )
+    result_pil = feather_composite(canvas_pil, result_pil, fill, feather=3.0)
+    return result_pil, msg

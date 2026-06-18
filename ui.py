@@ -21,7 +21,7 @@ def build_ui() -> gr.Blocks:
         gr.Markdown(
             "# OpenEdit\n"
             "**iOS 27 사진편집 (Clean Up · Expand · Reframe)** — "
-            "SHARP · Depth Anything V2 · SAM2 · Grounding DINO · Qwen2-VL · SD2"
+            "SHARP · Depth Anything V2 · SAM2 · Grounding DINO · Qwen2-VL · SDXL"
         )
 
         st_scene = gr.State()
@@ -55,7 +55,7 @@ def build_ui() -> gr.Blocks:
                 btn_expand = gr.Button("Expand · 확장", size="lg")
                 btn_reframe = gr.Button("Reframe · 시점 변경", size="lg", variant="primary")
 
-                gr.Markdown("**인페인팅: SD2 전용** (VLM 프롬프트)")
+                gr.Markdown("**인페인팅: SDXL** (1024px · VLM 프롬프트)")
 
                 with gr.Group(visible=False) as grp_clean_up:
                     gr.Markdown("**Clean Up** — 지우고 싶은 객체를 브러시로 문질러서 선택")

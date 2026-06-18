@@ -75,7 +75,7 @@ python app.py --share    # 외부 공유 링크
 
 - **Clean Up (지우기)**: 브러시로 문질러서 지우고 싶은 객체를 선택하면 SAM2로 자동 세그멘테이션 후 AI가 제거. 텍스트 검색으로도 객체 선택 가능.
 - **Expand (확장)**: 사진 프레임을 축소하여 바깥 영역을 AI로 자연스럽게 확장. 슬라이더로 실시간 미리보기.
-- **Reframe (시점 변경)**: 마치 사진을 찍기 전에 카메라 각도를 바꾸는 것처럼 시점 변경. **SHARP 단일 루트**로, Reframe 버튼을 누르면 SHARP 3D 분석 + yaw×pitch 격자 사전 렌더(로딩). 이후 슬라이더로 각도 조정 시 가장 가까운 격자 프레임을 즉시 미리보기(바깥쪽은 블러). [완료] 버튼으로 정확한 각도에서 SHARP 고품질 재렌더 + 바깥 영역을 SD2로 생성. 미리보기와 확정이 모두 SHARP라 결과가 일치한다(소폭 각도 ±12° 이내 권장).
+- **Reframe (시점 변경)**: 마치 사진을 찍기 전에 카메라 각도를 바꾸는 것처럼 시점 변경. **SHARP 단일 루트**로, Reframe 버튼을 누르면 SHARP 3D 분석 + yaw×pitch 격자 사전 렌더(로딩). 이후 슬라이더로 각도 조정 시 가장 가까운 격자 프레임을 즉시 미리보기(바깥쪽은 블러). [완료] 버튼으로 정확한 각도에서 SHARP 고품질 재렌더 + 바깥 영역을 SDXL로 생성. 미리보기와 확정이 모두 SHARP라 결과가 일치한다(소폭 각도 ±12° 이내 권장).
 
 ### 사용 파운데이션 모델
 
@@ -86,9 +86,10 @@ python app.py --share    # 외부 공유 링크
 | SAM2                 | `facebook/sam2-hiera-base-plus`                                                | Clean Up 세그멘테이션         |
 | Grounding DINO       | `IDEA-Research/grounding-dino-base`                                            | Clean Up 텍스트 검색         |
 | Qwen2-VL-2B          | `Qwen/Qwen2-VL-2B-Instruct`                                                    | SD 인페인팅 프롬프트 (VLM)      |
-| SD1.5 Inpaint        | `stable-diffusion-v1-5/stable-diffusion-inpainting`                            | 인페인팅 (Clean Up 제거·Expand/Reframe 바깥 생성) |
+| SDXL Inpaint         | `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`                             | 인페인팅 1024px (Clean Up·Expand·Reframe) |
+| LaMa                 | `big-lama` (simple-lama-inpainting)                                            | Expand 미리보기 배경 (프롬프트 없음)   |
 
-> 참고: Depth Anything V2(`task_depth_depthanythingv2.py`)와 LaMa(`task_inpaint_lama.py`)는 단독 task 스크립트로 포함되어 있으나, 현재 OpenEdit 앱 파이프라인(Clean Up·Expand·Reframe)에서는 사용하지 않습니다(Expand는 순수 아웃페인팅, Reframe는 SHARP 단일 루트).
+> 참고: Depth Anything V2(`task_depth_depthanythingv2.py`)는 단독 task로 포함. Expand는 LaMa 미리보기 + SDXL 확정, Reframe는 SHARP 단일 루트.
 
 
 ### Device
@@ -100,7 +101,8 @@ python app.py --share    # 외부 공유 링크
 ### 성능 팁
 
 - **Reframe(SHARP 단일 루트)**: 분석 단계에서 yaw×pitch 격자를 사전 렌더하므로 로딩이 다소 걸린다(GPU에서 수초). 드래그는 격자 최근접 프레임이라 즉시 표시되고, [완료]만 정확한 각도로 재렌더한다. 격자 밀도/해상도는 `features/reframe.py` 의 `GRID_*` 상수로 조절.
-- **인페인팅 백엔드**: `sd2` (VLM 프롬프트 사용, 고품질, 기본값), `lama` (빠름, 단순한 채움, Expand LDI 플레이트용), `opencv` (가장 빠름, 폴백).
+- **인페인팅 백엔드**: `sd2` → **SDXL Inpaint** (1024px, VLM 프롬프트, 8GB VRAM slicing), `lama` (Expand 미리보기), `opencv` (폴백).
+- **SDXL VRAM**: SHARP·VLM·LaMa와 **동시 적재 불가** — 순차 load/unload. Expand [완료]는 SDXL 1회 로드(수십 초 가능).
 - **각도 조정**: Reframe에서 소폭 각도 변경(±12° 이내) 권장. 큰 각도는 왜곡 발생 가능.
 
 ---
@@ -248,7 +250,7 @@ deeplearning/
   task_vlm_qwen2vl.py                # Qwen2-VL-2B — 이미지 질의응답
   task_depth_depthanythingv2.py      # Depth Anything V2 — 깊이 추정
   task_nvs_sharp.py                  # Apple SHARP — 3D Gaussian 예측
-  task_inpaint_sd.py                 # SD 인페인팅
+  task_inpaint_sd.py                 # SDXL 인페인팅 (1024px)
   task_inpaint_lama.py               # LaMa 인페인팅
   task_pose_vitpose.py               # ViTPose — 관절 키포인트
   sample.jpg             # 샘플 입력 이미지

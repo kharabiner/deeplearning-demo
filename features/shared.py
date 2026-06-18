@@ -83,7 +83,7 @@ def inpaint_commit(
     """인페인팅 실행. (결과 PIL, 상태 메시지) 반환.
 
     backend="lama" : 프롬프트 없이 주변 맥락으로 채움 (Expand 아웃페인팅 권장)
-    backend="sd2"  : SD 1.5 인페인팅 + 텍스트 프롬프트 (Clean Up 등)
+    backend="sd2"  : SDXL 인페인팅 + 텍스트 프롬프트 (Clean Up 등)
     """
     if int(fill.sum()) < 30:
         return image_pil, "완료 · 채울 영역 없음"
@@ -100,16 +100,16 @@ def inpaint_commit(
 
     if prompt is None:
         prompt = (caption_fn or vlm_caption)(image_pil)
-    progress(0.6, desc=f"{desc} — SD")
+    progress(0.6, desc=f"{desc} — SDXL")
     try:
         inp = rinp.get_inpainter("sd2", DEVICE)
         result = inp.inpaint(image_pil, fill, prompt=prompt, guidance=sd_guidance)
         inp.unload()
     except Exception as e:
-        raise gr.Error(f"{desc} 실패(SD): {e}")
+        raise gr.Error(f"{desc} 실패(SDXL): {e}")
 
     prompt_label = "(없음, 이미지 맥락)" if prompt == "" else prompt[:50]
-    return result, f"완료 · SD · prompt={prompt_label} · 우상단 아이콘으로 다운로드"
+    return result, f"완료 · SDXL · prompt={prompt_label} · 우상단 아이콘으로 다운로드"
 
 
 # ── 합성/마스크 헬퍼 ────────────────────────────────────────────────────────────

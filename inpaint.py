@@ -2,7 +2,7 @@
 inpaint.py — 인페인팅 백엔드 팩토리
 
 세 가지 백엔드를 공통 인터페이스로 제공한다 (clean up / expand / reframe 공용):
-  - "sd2"    : Stable Diffusion 인페인팅 (VLM 캡션 프롬프트로 고품질 생성)
+  - "sd2"    : SDXL 인페인팅 (1024px, VLM 캡션·고품질 생성)
   - "lama"   : LaMa (프롬프트 없이 주변 맥락으로 빠르게 채움 — LDI 배경 플레이트용)
   - "opencv" : cv2.inpaint (Telea) — 모델 없이 가장 빠른 폴백
 
