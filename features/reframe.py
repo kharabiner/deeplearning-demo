@@ -19,7 +19,7 @@ import task_nvs_sharp
 from .shared import (
     DEVICE, PREVIEW_MAX, COMMIT_LONG,
     HIDDEN, VISIBLE,
-    vlm_caption_reframe, feather_composite, dilate_mask, blur_holes,
+    SD15_PROMPT_REFRAME, feather_composite, dilate_mask, blur_holes,
 )
 
 ANGLE_STEP = 3.0
@@ -245,8 +245,7 @@ def reframe_commit(scene, _disp, img_np, yaw_idx, pitch_idx, progress=gr.Progres
     canvas = _inpaint_canvas(rgb, alpha)
     canvas_pil = numpy_to_pil(canvas)
 
-    progress(0.55, desc="Reframe — DreamShaper 바깥 생성")
-    prompt = vlm_caption_reframe(canvas_pil)
+    prompt = SD15_PROMPT_REFRAME
     try:
         inp = rinp.get_inpainter("sd15", DEVICE)
         result = inp.inpaint(

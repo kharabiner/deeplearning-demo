@@ -24,18 +24,20 @@ from task_inpaint_sd15 import MODEL_ID
 from .shared import (
     DEVICE, PREVIEW_MAX, HIDDEN, VISIBLE,
     inpaint_commit, dilate_mask, feather_composite,
+    SD15_PROMPT_EXPAND,
 )
 
 BACKDROP_SIGMA = 24.0   # LaMa 시드용 가우시안 블러(분석 1회)
 FEATHER_FRAC = 0.025    # 선명/배경 경계 페더 폭(이미지 짧은 변 대비)
 MAX_EXTEND = 1.6        # LaMa 미리보기 배경 생성 기준(슬라이더 최대와 일치)
 
-# DreamShaper SD1.5 inpaint — Expand [완료]
-EXPAND_SD15_PROMPT = "high quality photograph, seamless natural background continuation"
+# DreamShaper SD1.5 inpaint — Expand [완료] (고정 프롬프트)
+EXPAND_SD15_PROMPT = SD15_PROMPT_EXPAND
 EXPAND_SD15_GUIDANCE = 7.5
 EXPAND_SD15_STEPS = 25
 EXPAND_SD15_LONG = 512
 EXPAND_SD15_NEGATIVE = (
+    "frame, picture frame, photo border, canvas, mat, vignette, poster, "
     "new object, duplicate, extra limbs, "
     "blurry, distorted, artifacts, watermark, text, low quality, deformed"
 )
@@ -203,13 +205,14 @@ def expand_commit(_disp, backdrop, img_np, extend, progress=gr.Progress()):
     fill = dilate_mask(outer, iterations=2)
     canvas_pil = numpy_to_pil(canvas)
     free_memory(DEVICE)
-    progress(0.35, desc="DreamShaper SD1.5 로드")
+    prompt = EXPAND_SD15_PROMPT
+    progress(0.35, desc="DreamShaper 로드")
     try:
         inp = rinp.preload_expand_sd15(DEVICE)
         progress(0.6, desc="아웃페인팅 — DreamShaper")
         result_pil = inp.inpaint(
             canvas_pil, fill,
-            prompt=EXPAND_SD15_PROMPT,
+            prompt=prompt,
             guidance=EXPAND_SD15_GUIDANCE,
             steps=EXPAND_SD15_STEPS,
             long=EXPAND_SD15_LONG,
@@ -221,6 +224,6 @@ def expand_commit(_disp, backdrop, img_np, extend, progress=gr.Progress()):
     model_short = MODEL_ID.split("/")[-1]
     msg = (
         f"완료 · {model_short} {EXPAND_SD15_STEPS}step · "
-        f"prompt={EXPAND_SD15_PROMPT[:40]} · 우상단 아이콘으로 다운로드"
+        f"prompt={prompt[:40]} · 우상단 아이콘으로 다운로드"
     )
     return result_pil, msg

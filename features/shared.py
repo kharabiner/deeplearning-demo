@@ -21,50 +21,96 @@ COMMIT_LONG = 1280
 HIDDEN = gr.update(visible=False)
 VISIBLE = gr.update(visible=True)
 
+# DreamShaper inpaint — Qwen2-VL: 장면 묘사만 출력 (지시문/메타 단어 금지)
+_VLM_RULES = (
+    "Reply with ONE short English phrase only (max 15 words). "
+    "Describe visible scene content: surfaces, colors, lighting, materials. "
+    "No verbs like create/generate/expand. "
+    "No words: frame, border, canvas, inpainting, outpainting, continuation, photo."
+)
 
-# ── VLM 캡션 (SD 인페인팅 프롬프트) ─────────────────────────────────────────────
-def vlm_caption(image: Image.Image) -> str:
-    """DreamShaper 인페인팅 프롬프트용 캡션. 실패 시 기본 프롬프트."""
+VLM_QUESTION_CLEANUP = (
+    f"{_VLM_RULES} "
+    "Task: object was removed from this photo. "
+    "What background (wall, floor, sky, texture) should fill that spot?"
+)
+
+FALLBACK_PROMPT_CLEANUP = (
+    "same wall and floor texture, natural indoor lighting, photorealistic, sharp focus"
+)
+
+# Expand / Reframe — 고정 DreamShaper 프롬프트 (LaMa·캔버스가 맥락 제공, VLM 불필요)
+SD15_PROMPT_EXPAND = (
+    "natural scene continuation, photorealistic photograph, "
+    "same lighting and colors, highly detailed, sharp focus"
+)
+SD15_PROMPT_REFRAME = (
+    "same room and environment, natural lighting, photorealistic, sharp focus"
+)
+
+# VLM 이 지시문을 그대로 내보내면 DreamShaper 가 액자/메타 이미지를 그림
+_BAD_PROMPT_STARTS = (
+    "create ", "generate ", "describe ", "write ", "output ", "expand ",
+    "seamless continuation", "continuation of", "extend the", "extending ",
+)
+_BAD_PROMPT_SUBSTR = (
+    "beyond the current", "outpainting", "inpainting", "picture frame",
+    "photo frame", " frame,", " frame ", " canvas", " border", " vignette",
+)
+
+
+def _sanitize_dreamshaper_prompt(raw: str, fallback: str) -> str:
+    """지시문/액자 유발 메타 프롬프트 → fallback."""
+    prompt = raw.strip().strip('"').strip("'").split("\n")[0].strip()
+    if len(prompt) < 6:
+        return fallback
+    low = prompt.lower()
+    if any(low.startswith(s) for s in _BAD_PROMPT_STARTS):
+        return fallback
+    if any(s in low for s in _BAD_PROMPT_SUBSTR):
+        return fallback
+    return prompt
+
+
+def _vlm_dreamshaper_prompt(
+    image: Image.Image,
+    question: str,
+    fallback: str,
+    *,
+    feature: str,
+) -> str:
+    """Qwen2-VL → DreamShaper inpaint 프롬프트. 실패 시 fallback."""
     try:
         import task_vlm_qwen2vl as task_vlm
         vproc, vmodel = task_vlm.load_model(DEVICE)
         desc = task_vlm.run(
             image, vproc, vmodel,
-            question="Describe the background scene in a short phrase for image inpainting "
-                     "(scene type, colors, lighting). Keep it under 15 words.",
-            max_new_tokens=48, device=DEVICE,
+            question=question,
+            max_new_tokens=64,
+            device=DEVICE,
         )
         del vproc, vmodel
         free_memory(DEVICE)
-        return f"{desc.strip()}, {rinp.DEFAULT_PROMPT}"
+        prompt = _sanitize_dreamshaper_prompt(desc, fallback)
+        if prompt == fallback:
+            print(f"[shared] VLM {feature} meta/unsafe → fallback (raw: {desc[:60]!r})")
+        else:
+            print(f"[shared] VLM {feature} prompt: {prompt[:80]}")
+        return prompt
     except Exception as e:
-        print(f"[shared] VLM 캡션 실패 → 기본 프롬프트: {e}")
-        return rinp.DEFAULT_PROMPT
+        print(f"[shared] VLM {feature} 실패 → fallback: {e}")
+        return fallback
 
 
-def vlm_caption_reframe(image: Image.Image) -> str:
-    """Reframe 바깥 SD1.5용 — 장면 연장(사람·사물 포함 가능)."""
-    try:
-        import task_vlm_qwen2vl as task_vlm
-        vproc, vmodel = task_vlm.load_model(DEVICE)
-        desc = task_vlm.run(
-            image, vproc, vmodel,
-            question="Describe this photo scene in a short phrase for extending "
-                     "the image edges seamlessly. Under 15 words.",
-            max_new_tokens=48, device=DEVICE,
-        )
-        del vproc, vmodel
-        free_memory(DEVICE)
-        return (
-            f"seamless extension of {desc.strip()}, same scene and lighting, "
-            "photorealistic, sharp focus"
-        )
-    except Exception as e:
-        print(f"[shared] Reframe VLM 실패 → 기본: {e}")
-        return (
-            "seamless natural scene extension, same lighting and perspective, "
-            "photorealistic, sharp focus"
-        )
+def vlm_caption_clean_up(image: Image.Image) -> str:
+    """Clean Up [완료] — DreamShaper용 프롬프트 (Qwen2-VL 생성)."""
+    return _vlm_dreamshaper_prompt(
+        image, VLM_QUESTION_CLEANUP, FALLBACK_PROMPT_CLEANUP, feature="Clean Up",
+    )
+
+
+# 하위 호환
+vlm_caption = vlm_caption_clean_up
 
 
 # ── 인페인팅 실행 (확정 공용) ───────────────────────────────────────────────────
@@ -93,7 +139,7 @@ def inpaint_commit(
 
     label = "DreamShaper"
     if prompt is None:
-        prompt = (caption_fn or vlm_caption)(image_pil)
+        prompt = (caption_fn or vlm_caption_clean_up)(image_pil)
     progress(0.6, desc=f"{desc} — {label}")
     try:
         inp = rinp.get_inpainter("sd15", DEVICE)

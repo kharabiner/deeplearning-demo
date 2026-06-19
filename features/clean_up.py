@@ -20,7 +20,7 @@ from common import free_memory, pil_to_numpy, numpy_to_pil, resize_if_needed
 import inpaint as rinp
 from .shared import (
     DEVICE, PREVIEW_MAX, HIDDEN, VISIBLE,
-    vlm_caption, feather_composite, dilate_mask,
+    vlm_caption_clean_up, feather_composite, dilate_mask,
 )
 
 
@@ -257,10 +257,10 @@ def clean_up_commit(img_np, mask, editor_value, progress=gr.Progress()):
     unload_sam()
     fill = dilate_mask(mask, iterations=6)
     orig_pil = numpy_to_pil(img_np)
-    progress(0.35, desc="Clean Up — 객체 제거 중")
-
+    progress(0.25, desc="Qwen2-VL — DreamShaper 프롬프트")
     try:
-        prompt = vlm_caption(orig_pil)
+        prompt = vlm_caption_clean_up(orig_pil)
+        progress(0.35, desc="Clean Up — 객체 제거 중")
         inp = rinp.get_inpainter("sd15", DEVICE)
         filled = inp.inpaint(orig_pil, fill, prompt=prompt)
         inp.unload()
