@@ -1,8 +1,8 @@
 """
 task_inpaint_sd15.py — SD 1.5 Generative Image Inpainting
-모델: runwayml/stable-diffusion-inpainting
+모델: Lykon/dreamshaper-8-inpainting (SD1.5 inpaint 파인튠)
 
-512px 네이티브 · Reframe 바깥 영역 등 좁은 마스크·빠른 생성에 적합.
+512px · Clean Up · Expand · Reframe [완료]
 8GB VRAM: fp16 + attention/vae slicing (순차 load/unload 필수).
 
 사용법(단독):
@@ -22,8 +22,7 @@ from PIL import Image
 
 from common import get_device, get_dtype, free_memory, mask_to_pil, composite_hole
 
-MODEL_ID = "runwayml/stable-diffusion-inpainting"
-EXPAND_MODEL_ID = "Lykon/dreamshaper-8-inpainting"  # Expand [완료] — SD1.5 inpaint 파인튠
+MODEL_ID = "Lykon/dreamshaper-8-inpainting"
 INPAINT_LONG = 512
 
 DEFAULT_PROMPT = "seamless natural background, photorealistic, high quality, sharp focus"
@@ -51,12 +50,15 @@ def _resize_for_inpaint(image: Image.Image, mask: Image.Image, long: int = INPAI
 
 
 class SD15Inpainter:
-    """SD 1.5 Inpainting. prompt 로 채울 내용을 유도."""
+    """DreamShaper SD1.5 Inpainting."""
 
     def __init__(self, device: Optional[str] = None, model_id: str = MODEL_ID):
         self.device = device or get_device()
         self.model_id = model_id
         self.pipe = None
+
+    def is_ready(self) -> bool:
+        return self.pipe is not None
 
     def load(self):
         from diffusers import StableDiffusionInpaintPipeline
@@ -126,13 +128,7 @@ class SD15Inpainter:
 
 
 class ExpandSD15Inpainter(SD15Inpainter):
-    """Expand [완료] 전용 — DreamShaper inpaint (세션 동안 GPU 상주)."""
-
-    def __init__(self, device: Optional[str] = None):
-        super().__init__(device, model_id=EXPAND_MODEL_ID)
-
-    def is_ready(self) -> bool:
-        return self.pipe is not None
+    """Expand [완료] — DreamShaper 세션 캐시 (GPU 상주)."""
 
 
 def load_model(device: str) -> SD15Inpainter:
@@ -150,7 +146,7 @@ if __name__ == "__main__":
 
     from common import load_image, save_result
 
-    parser = argparse.ArgumentParser(description="SD 1.5 inpainting 데모")
+    parser = argparse.ArgumentParser(description="DreamShaper SD1.5 inpainting 데모")
     parser.add_argument("--image", type=str, required=True)
     parser.add_argument("--prompt", type=str, default=None)
     parser.add_argument("--box", type=float, default=0.25)
@@ -170,5 +166,5 @@ if __name__ == "__main__":
     inp.unload()
 
     stem = Path(args.image).stem
-    save_result(out, f"{stem}_sd15.png")
+    save_result(out, f"{stem}_dreamshaper.png")
     print("완료 → outputs/ 확인")

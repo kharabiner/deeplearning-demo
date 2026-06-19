@@ -20,7 +20,7 @@ from PIL import Image
 
 from common import pil_to_numpy, numpy_to_pil, resize_if_needed, free_memory
 import inpaint as rinp
-from task_inpaint_sd15 import EXPAND_MODEL_ID
+from task_inpaint_sd15 import MODEL_ID
 from .shared import (
     DEVICE, PREVIEW_MAX, HIDDEN, VISIBLE,
     inpaint_commit, dilate_mask, feather_composite,
@@ -162,6 +162,8 @@ def expand_analyze(image, progress=gr.Progress()):
     if image is None:
         raise gr.Error("먼저 왼쪽에 사진을 업로드하세요.")
     rinp.unload_expand_sd15()
+    from features.clean_up import unload_sam
+    unload_sam()
     free_memory(DEVICE)
     progress(0.05, desc="Expand — 준비 중...")
     small = resize_if_needed(image.convert("RGB"), max_size=PREVIEW_MAX)
@@ -216,7 +218,7 @@ def expand_commit(_disp, backdrop, img_np, extend, progress=gr.Progress()):
     except Exception as e:
         raise gr.Error(f"아웃페인팅 실패(DreamShaper): {e}")
     result_pil = feather_composite(canvas_pil, result_pil, fill, feather=3.0)
-    model_short = EXPAND_MODEL_ID.split("/")[-1]
+    model_short = MODEL_ID.split("/")[-1]
     msg = (
         f"완료 · {model_short} {EXPAND_SD15_STEPS}step · "
         f"prompt={EXPAND_SD15_PROMPT[:40]} · 우상단 아이콘으로 다운로드"

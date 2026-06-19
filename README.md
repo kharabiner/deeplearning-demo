@@ -69,8 +69,8 @@ python app.py --share    # 외부 공유 링크
 #### 기능 설명
 
 - **Clean Up (지우기)**: 브러시로 문질러서 지우고 싶은 객체를 선택하면 SAM2로 자동 세그멘테이션 후 AI가 제거. 텍스트 검색으로도 객체 선택 가능.
-- **Expand (확장)**: LaMa 미리보기 배경 → 슬라이더로 프레임 축소·실시간 미리보기 → [완료] **SDXL** 아웃페인팅.
-- **Reframe (시점 변경)**: **SHARP + gsplat**. 슬라이더 수치(좌우 -16~+16, 상하 -5~+5, **1당 3°**) · 미리보기 블러 · [완료] gsplat + **SD 1.5** 바깥 생성.
+- **Expand (확장)**: LaMa 미리보기 배경 → 슬라이더로 프레임 축소·실시간 미리보기 → [완료] **DreamShaper** 아웃페인팅.
+- **Reframe (시점 변경)**: **SHARP + gsplat**. 슬라이더 수치(좌우 -16~+16, 상하 -5~+5, **1당 3°**) · 미리보기 블러 · [완료] gsplat + **DreamShaper** 바깥 생성.
 
 ### 사용 파운데이션 모델
 
@@ -82,8 +82,7 @@ python app.py --share    # 외부 공유 링크
 | SAM2                 | `facebook/sam2-hiera-base-plus`                                                | Clean Up 세그멘테이션         |
 | Grounding DINO       | `IDEA-Research/grounding-dino-base`                                            | Clean Up 텍스트 검색         |
 | Qwen2-VL-2B          | `Qwen/Qwen2-VL-2B-Instruct`                                                    | SD 인페인팅 프롬프트 (VLM)      |
-| SDXL Inpaint         | `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`                             | Clean Up · Expand [완료]   |
-| SD 1.5 Inpaint       | `runwayml/stable-diffusion-inpainting`                                         | Reframe [완료]             |
+| DreamShaper Inpaint  | `Lykon/dreamshaper-8-inpainting`                                               | Clean Up · Expand · Reframe [완료] |
 | LaMa                 | `big-lama` (simple-lama-inpainting)                                            | Expand 미리보기              |
 
 > Windows `.venv`: **Python 3.10** · torch **2.4.1+cu124** · diffusers **0.36.0** (`scripts\setup.ps1`).
@@ -97,7 +96,7 @@ python app.py --share    # 외부 공유 링크
 ### 성능 팁
 
 - **Reframe**: yaw×pitch 격자 전체 프리렌더 → GPU 수 분 가능. 상수: `features/reframe.py`.
-- **인페인팅**: SDXL (Expand·Clean Up), SD1.5 (Reframe), LaMa (Expand 미리보기).
+- **인페인팅**: DreamShaper SD1.5 (Clean Up · Expand · Reframe [완료]), LaMa (Expand 미리보기).
 - **VRAM**: 모델 순차 load/unload · [완료] 시 SD 로드 + 수십 초.
 
 ---
@@ -228,15 +227,14 @@ deeplearning/
   features/
     shared.py            # VLM 캡션 · 인페인팅 합성
     clean_up.py          # Clean Up
-    expand.py            # Expand (LaMa + SDXL)
-    reframe.py           # Reframe (gsplat + SD1.5)
+    expand.py            # Expand (LaMa + DreamShaper)
+    reframe.py           # Reframe (gsplat + DreamShaper)
   reframe_yaw.py         # yaw×pitch 프리렌더 그리드
   sharp_render.py        # SHARP + gsplat 렌더
   splat_torch.py         # gsplat 불가 시 PyTorch 폴백
-  inpaint.py             # 인페인팅 팩토리 (sd2 / sd15 / lama / opencv)
+  inpaint.py             # 인페인팅 팩토리 (sd15 / lama / opencv)
   task_*.py              # 중간 과제 단독 스크립트
-  task_inpaint_sd.py     # SDXL
-  task_inpaint_sd15.py   # SD 1.5
+  task_inpaint_sd15.py   # DreamShaper SD1.5 inpaint
   scripts/setup.ps1      # Windows: Python 3.10 + .venv 일괄 설치
   requirements.txt
   third_party/ml-sharp   # SHARP (setup.ps1 에서 editable install)

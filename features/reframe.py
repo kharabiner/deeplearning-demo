@@ -3,7 +3,7 @@ features/reframe.py — Reframe · yaw/pitch · gsplat · 프리렌더 그리드
 
   슬라이더: 정수 수치 (좌우 -16~+16, 상하 -5~+5) — 각도 아님
   실제 회전: 수치 × 3°  (예: 16 → 48°, -5 → -15°)
-  [완료]: 동일 gsplat 정확 각도 + 바깥 SD1.5
+  [완료]: 동일 gsplat 정확 각도 + 바깥 DreamShaper
 """
 
 from __future__ import annotations
@@ -133,6 +133,8 @@ def reframe_analyze(image, progress=gr.Progress()):
         raise gr.Error("먼저 왼쪽에 사진을 업로드하세요.")
 
     rinp.unload_expand_sd15()
+    from features.clean_up import unload_sam
+    unload_sam()
     free_memory(DEVICE)
 
     try:
@@ -174,7 +176,7 @@ def reframe_analyze(image, progress=gr.Progress()):
         f"📍 좌우 {YAW_IDX_MIN}~{YAW_IDX_MAX} · 상하 {PITCH_IDX_MIN}~{PITCH_IDX_MAX} "
         f"(×{ANGLE_STEP:g}° → 최대 ±{YAW_RANGE_DEG:g}° / ±{PITCH_RANGE_DEG:g}°) · "
         f"{n}프레임 ({ny}×{np_})\n"
-        f"🎚 슬라이더 0=정면 · 수치 1당 {ANGLE_STEP:g}° · [완료] gsplat + SD1.5"
+        f"🎚 슬라이더 0=정면 · 수치 1당 {ANGLE_STEP:g}° · [완료] gsplat + DreamShaper"
     )
     return (
         scene, None, grid, img_np, None, "reframe",
@@ -243,7 +245,7 @@ def reframe_commit(scene, _disp, img_np, yaw_idx, pitch_idx, progress=gr.Progres
     canvas = _inpaint_canvas(rgb, alpha)
     canvas_pil = numpy_to_pil(canvas)
 
-    progress(0.55, desc="Reframe — SD1.5 바깥 생성")
+    progress(0.55, desc="Reframe — DreamShaper 바깥 생성")
     prompt = vlm_caption_reframe(canvas_pil)
     try:
         inp = rinp.get_inpainter("sd15", DEVICE)
@@ -258,4 +260,4 @@ def reframe_commit(scene, _disp, img_np, yaw_idx, pitch_idx, progress=gr.Progres
         raise gr.Error(f"인페인팅 실패: {e}")
 
     result = feather_composite(sharp_pil, result, fill, feather=3.0)
-    return result, f"✅ Reframe · {tag} · gsplat + SD1.5 · fill={fill_ratio:.1%}"
+    return result, f"✅ Reframe · {tag} · gsplat + DreamShaper · fill={fill_ratio:.1%}"

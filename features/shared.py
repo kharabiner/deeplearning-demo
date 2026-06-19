@@ -24,7 +24,7 @@ VISIBLE = gr.update(visible=True)
 
 # ── VLM 캡션 (SD 인페인팅 프롬프트) ─────────────────────────────────────────────
 def vlm_caption(image: Image.Image) -> str:
-    """SD2 인페인팅 프롬프트용 캡션. 실패 시 기본 프롬프트."""
+    """DreamShaper 인페인팅 프롬프트용 캡션. 실패 시 기본 프롬프트."""
     try:
         import task_vlm_qwen2vl as task_vlm
         vproc, vmodel = task_vlm.load_model(DEVICE)
@@ -70,14 +70,13 @@ def vlm_caption_reframe(image: Image.Image) -> str:
 # ── 인페인팅 실행 (확정 공용) ───────────────────────────────────────────────────
 def inpaint_commit(
     image_pil, fill, progress, desc="인페인팅",
-    prompt=None, caption_fn=None, backend="sd2", sd_guidance=7.5,
+    prompt=None, caption_fn=None, backend="sd15", sd_guidance=7.5,
     sd_long=None, sd_steps=None, sd_negative=None,
 ):
     """인페인팅 실행. (결과 PIL, 상태 메시지) 반환.
 
-    backend="lama" : 프롬프트 없이 주변 맥락으로 채움
-    backend="sd2"  : SDXL (Clean Up 등)
-    backend="sd15" : SD 1.5 (Expand [완료] — SDXL 대비 빠름)
+    backend="lama"  : 프롬프트 없이 주변 맥락으로 채움
+    backend="sd15"  : DreamShaper SD1.5 inpaint
     """
     if int(fill.sum()) < 30:
         return image_pil, "완료 · 채울 영역 없음"
@@ -92,13 +91,12 @@ def inpaint_commit(
             raise gr.Error(f"{desc} 실패(LaMa): {e}")
         return result, f"완료 · LaMa(프롬프트 없음, 주변 맥락) · 우상단 아이콘으로 다운로드"
 
-    use_sd15 = backend in ("sd15", "sd1.5", "sd-1.5")
-    label = "SD1.5" if use_sd15 else "SDXL"
+    label = "DreamShaper"
     if prompt is None:
         prompt = (caption_fn or vlm_caption)(image_pil)
     progress(0.6, desc=f"{desc} — {label}")
     try:
-        inp = rinp.get_inpainter("sd15" if use_sd15 else "sd2", DEVICE)
+        inp = rinp.get_inpainter("sd15", DEVICE)
         kw = {"prompt": prompt, "guidance": sd_guidance}
         if sd_long is not None:
             kw["long"] = sd_long

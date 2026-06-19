@@ -20,7 +20,7 @@ def build_ui() -> gr.Blocks:
         gr.Markdown(
             "# OpenEdit\n"
             "**iOS 27 (Clean Up · Expand · Reframe)** — "
-            "SHARP · gsplat · SAM2 · LaMa · SDXL"
+            "SHARP · gsplat · SAM2 · LaMa · DreamShaper"
         )
 
         st_scene = gr.State()
@@ -89,7 +89,7 @@ def build_ui() -> gr.Blocks:
                         minimum=PITCH_IDX_MIN, maximum=PITCH_IDX_MAX, value=0, step=PITCH_STEP,
                         label=f"상하 ({PITCH_IDX_MIN}~{PITCH_IDX_MAX}, ×{ANGLE_STEP:g}°)",
                     )
-                    btn_reframe_commit = gr.Button("완료 — SD1.5 바깥 생성", variant="primary")
+                    btn_reframe_commit = gr.Button("완료 — DreamShaper 바깥 생성", variant="primary")
 
                 status = gr.Markdown("사진을 업로드한 뒤 기능 버튼을 누르세요.")
 
@@ -102,10 +102,12 @@ def build_ui() -> gr.Blocks:
         btn_expand.click(expand.expand_analyze, inputs=[canvas], outputs=analyze_outs)
         btn_reframe.click(reframe.reframe_analyze, inputs=[canvas], outputs=analyze_outs)
 
-        clean_up_editor.change(
+        clean_up_editor.input(
             clean_up.clean_up_brush,
             inputs=[st_mode, st_img, st_mask, clean_up_editor],
             outputs=[clean_up_editor, st_mask, status],
+            trigger_mode="always_last",
+            show_progress="minimal",
         )
         btn_clean_up_detect.click(
             clean_up.clean_up_detect,
@@ -119,7 +121,7 @@ def build_ui() -> gr.Blocks:
         )
         btn_clean_up_commit.click(
             clean_up.clean_up_commit,
-            inputs=[st_img, st_mask],
+            inputs=[st_img, st_mask, clean_up_editor],
             outputs=[canvas, clean_up_editor, st_img, status],
         )
 
