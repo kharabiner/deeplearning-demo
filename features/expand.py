@@ -164,6 +164,7 @@ def expand_analyze(image, progress=gr.Progress()):
         HIDDEN,
         "✅ Expand 준비 · LaMa 미리보기 배경 완료 → 슬라이더 조절 → [완료] SD 고품질 생성",
         HIDDEN, VISIBLE, HIDDEN,
+        gr.skip(), gr.skip(),
     )
 
 

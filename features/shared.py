@@ -1,15 +1,5 @@
 """
-features/shared.py — 세 기능(clean up / expand / reframe) 공용 글루 코드
-
-모델별 코드(task_*.py)와 기능별 코드(clean_up/expand/reframe) 사이의 얇은 중간층.
-모델을 불러와 돌리고 결과를 이어붙이는, 여러 기능이 함께 쓰는 함수만 모은다.
-
-  - DEVICE / 렌더 상수
-  - HIDDEN / VISIBLE : Gradio update 헬퍼
-  - vlm_caption / vlm_caption_reframe : Qwen2-VL → SD 인페인팅 프롬프트
-  - inpaint_commit : SD2 인페인팅 실행 래퍼
-  - feather_composite : 채운 영역을 원본에 부드럽게 합성
-  - resize_mask : bool 마스크 크기 변경
+features/shared.py — Clean Up / Expand / Reframe 공용 글루 코드
 """
 
 from __future__ import annotations
@@ -25,13 +15,9 @@ import inpaint as rinp
 
 DEVICE = get_device()
 
-# ── 렌더/미리보기 상수 ──────────────────────────────────────────────────────────
-PREVIEW_MAX = 1024         # 미리보기/격자 렌더 긴 변 (고해상도)
-COMMIT_LONG = 1280         # 확정 렌더 긴 변 (최종 품질 우선)
-RENDER_SS_COMMIT = 2       # SHARP 확정 렌더 슈퍼샘플 배수
-FALLBACK_PARALLAX = 6.0    # depth 워핑 패럴랙스 (미리보기용)
+PREVIEW_MAX = 1024
+COMMIT_LONG = 1280
 
-# ── Gradio 업데이트 헬퍼 ────────────────────────────────────────────────────────
 HIDDEN = gr.update(visible=False)
 VISIBLE = gr.update(visible=True)
 
@@ -57,22 +43,28 @@ def vlm_caption(image: Image.Image) -> str:
 
 
 def vlm_caption_reframe(image: Image.Image) -> str:
-    """Reframe용 보수적 캡션 — 장면 전체 재생성이 아니라 가장자리 연장."""
+    """Reframe 바깥 SD1.5용 — 장면 연장(사람·사물 포함 가능)."""
     try:
         import task_vlm_qwen2vl as task_vlm
         vproc, vmodel = task_vlm.load_model(DEVICE)
         desc = task_vlm.run(
             image, vproc, vmodel,
-            question="Describe only the background texture and colors at the image edges "
-                     "for seamless extension. Under 12 words. Do not mention objects.",
-            max_new_tokens=40, device=DEVICE,
+            question="Describe this photo scene in a short phrase for extending "
+                     "the image edges seamlessly. Under 15 words.",
+            max_new_tokens=48, device=DEVICE,
         )
         del vproc, vmodel
         free_memory(DEVICE)
-        return f"seamless extension of {desc.strip()}, same lighting, photorealistic"
+        return (
+            f"seamless extension of {desc.strip()}, same scene and lighting, "
+            "photorealistic, sharp focus"
+        )
     except Exception as e:
-        print(f"[shared] Reframe VLM 캡션 실패 → 기본 프롬프트: {e}")
-        return "seamless natural background extension, same scene, photorealistic"
+        print(f"[shared] Reframe VLM 실패 → 기본: {e}")
+        return (
+            "seamless natural scene extension, same lighting and perspective, "
+            "photorealistic, sharp focus"
+        )
 
 
 # ── 인페인팅 실행 (확정 공용) ───────────────────────────────────────────────────

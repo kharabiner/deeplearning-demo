@@ -17,44 +17,39 @@ cd deeplearning-demo
 
 ## Installation guide
 
-1. **Python** 3.10 이상 권장
-2. **가상환경 생성:** `python -m venv .venv`
-3. **가상환경 활성화**
+**Python 3.10 필수** (Windows에서 gsplat CUDA 휠 + torch 2.4.1+cu124 조합). Python 3.11 `.venv`는 Reframe gsplat 미지원( torch splat 폴백만 가능).
+
+### Windows (권장 — 한 번에 설치)
 
 ```cmd
-# Windows
-.venv\Scripts\activate.bat
-
-# Linux / macOS
-source .venv/bin/activate
+git clone https://github.com/kharabiner/deeplearning-demo.git
+cd deeplearning-demo
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+.venv\Scripts\activate
+python app.py
 ```
 
-1. **의존성 설치**
+`scripts\setup.ps1` 이 `.venv` 생성 후 **torch 2.4.1+cu124 · gsplat · diffusers 0.36.0 · ml-sharp** 등을 설치합니다.
+
+### 수동 설치 (Linux / macOS 또는 커스텀)
 
 ```cmd
-# Windows — 반드시 venv의 python으로 설치 (시스템 pip 혼동 방지)
+py -3.10 -m venv .venv
+.venv\Scripts\activate.bat          # Windows
+# source .venv/bin/activate         # Linux / macOS
+
 .venv\Scripts\python.exe -m pip install -r requirements.txt
-
-# Linux / macOS
-pip install -r requirements.txt
+# NVIDIA GPU: https://pytorch.org 에서 CUDA/MPS 빌드 설치 후 gsplat·ml-sharp 추가
+pip install -e third_party/ml-sharp
 ```
 
-1. **SHARP 설치**
+가중치(SHARP·HF 모델)는 최초 실행 시 자동 다운로드(토큰 불필요).
 
-```cmd
-# Windows
-powershell -ExecutionPolicy Bypass -File scripts\setup_sharp.ps1
+### Device
 
-# Linux / macOS
-bash scripts/setup_sharp.sh
-```
-
-가중치는 최초 Reframe 실행 시 공개 URL에서 자동 다운로드됩니다(토큰 불필요).
-
-1. **GPU (선택)**
-  - NVIDIA: CUDA용 PyTorch가 설치된 환경이면 자동으로 `cuda` 사용  
-  - Apple Silicon: `mps` 사용 (float32)  
-  - 그 외: `cpu`
+- **CUDA (NVIDIA, Windows)**: 전 기능 권장 · Reframe **gsplat** 렌더
+- **MPS (Apple Silicon)**: Clean Up / Expand 동작 · Reframe gsplat 없음
+- **CPU**: Clean Up / Expand만 권장(느림) · Reframe 비권장
 
 ---
 
@@ -74,36 +69,36 @@ python app.py --share    # 외부 공유 링크
 #### 기능 설명
 
 - **Clean Up (지우기)**: 브러시로 문질러서 지우고 싶은 객체를 선택하면 SAM2로 자동 세그멘테이션 후 AI가 제거. 텍스트 검색으로도 객체 선택 가능.
-- **Expand (확장)**: 사진 프레임을 축소하여 바깥 영역을 AI로 자연스럽게 확장. 슬라이더로 실시간 미리보기.
-- **Reframe (시점 변경)**: 마치 사진을 찍기 전에 카메라 각도를 바꾸는 것처럼 시점 변경. **SHARP 단일 루트**로, Reframe 버튼을 누르면 SHARP 3D 분석 + yaw×pitch 격자 사전 렌더(로딩). 이후 슬라이더로 각도 조정 시 가장 가까운 격자 프레임을 즉시 미리보기(바깥쪽은 블러). [완료] 버튼으로 정확한 각도에서 SHARP 고품질 재렌더 + 바깥 영역을 SDXL로 생성. 미리보기와 확정이 모두 SHARP라 결과가 일치한다(소폭 각도 ±12° 이내 권장).
+- **Expand (확장)**: LaMa 미리보기 배경 → 슬라이더로 프레임 축소·실시간 미리보기 → [완료] **SDXL** 아웃페인팅.
+- **Reframe (시점 변경)**: **SHARP + gsplat**. 슬라이더 수치(좌우 -16~+16, 상하 -5~+5, **1당 3°**) · 미리보기 블러 · [완료] gsplat + **SD 1.5** 바깥 생성.
 
 ### 사용 파운데이션 모델
 
 
 | 모델                   | HF ID / 출처                                                                     | 역할                      |
 | -------------------- | ------------------------------------------------------------------------------ | ----------------------- |
-| Apple SHARP          | `apple/ml-sharp` + 공개 체크포인트                                                    | Reframe 3D Gaussian 생성·렌더 |
+| Apple SHARP          | `apple/ml-sharp` + 공개 체크포인트                                                    | Reframe 3D Gaussian      |
+| gsplat               | CUDA wheel (torch 2.4.1)                                                       | Reframe splat 렌더        |
 | SAM2                 | `facebook/sam2-hiera-base-plus`                                                | Clean Up 세그멘테이션         |
 | Grounding DINO       | `IDEA-Research/grounding-dino-base`                                            | Clean Up 텍스트 검색         |
 | Qwen2-VL-2B          | `Qwen/Qwen2-VL-2B-Instruct`                                                    | SD 인페인팅 프롬프트 (VLM)      |
-| SDXL Inpaint         | `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`                             | 인페인팅 1024px (Clean Up·Expand·Reframe) |
-| LaMa                 | `big-lama` (simple-lama-inpainting)                                            | Expand 미리보기 배경 (프롬프트 없음)   |
+| SDXL Inpaint         | `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`                             | Clean Up · Expand [완료]   |
+| SD 1.5 Inpaint       | `runwayml/stable-diffusion-inpainting`                                         | Reframe [완료]             |
+| LaMa                 | `big-lama` (simple-lama-inpainting)                                            | Expand 미리보기              |
 
-> 참고: Depth Anything V2(`task_depth_depthanythingv2.py`)는 단독 task로 포함. Expand는 LaMa 미리보기 + SDXL 확정, Reframe는 SHARP 단일 루트.
-
+> Windows `.venv`: **Python 3.10** · torch **2.4.1+cu124** · diffusers **0.36.0** (`scripts\setup.ps1`).
 
 ### Device
 
-- **CUDA** (NVIDIA): 권장, 전 기능 고성능
-- **MPS** (Apple Silicon): Clean Up/Expand/Reframe 동작 (float32)
-- **CPU**: Clean Up/Expand만 권장(느림). Reframe은 SHARP 격자 사전 렌더가 매우 느릴 수 있음(GPU 권장)
+- **CUDA (NVIDIA)**: 전 기능 권장 · Reframe gsplat
+- **MPS**: Clean Up / Expand · Reframe gsplat 없음
+- **CPU**: Clean Up / Expand만 권장
 
 ### 성능 팁
 
-- **Reframe(SHARP 단일 루트)**: 분석 단계에서 yaw×pitch 격자를 사전 렌더하므로 로딩이 다소 걸린다(GPU에서 수초). 드래그는 격자 최근접 프레임이라 즉시 표시되고, [완료]만 정확한 각도로 재렌더한다. 격자 밀도/해상도는 `features/reframe.py` 의 `GRID_*` 상수로 조절.
-- **인페인팅 백엔드**: `sd2` → **SDXL Inpaint** (1024px, VLM 프롬프트, 8GB VRAM slicing), `lama` (Expand 미리보기), `opencv` (폴백).
-- **SDXL VRAM**: SHARP·VLM·LaMa와 **동시 적재 불가** — 순차 load/unload. Expand [완료]는 SDXL 1회 로드(수십 초 가능).
-- **각도 조정**: Reframe에서 소폭 각도 변경(±12° 이내) 권장. 큰 각도는 왜곡 발생 가능.
+- **Reframe**: yaw×pitch 격자 전체 프리렌더 → GPU 수 분 가능. 상수: `features/reframe.py`.
+- **인페인팅**: SDXL (Expand·Clean Up), SD1.5 (Reframe), LaMa (Expand 미리보기).
+- **VRAM**: 모델 순차 load/unload · [완료] 시 SD 로드 + 수십 초.
 
 ---
 
@@ -228,33 +223,25 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 
 ```
 deeplearning/
-  app.py                 # 실행 진입점 (argparse + launch)
-  ui.py                  # 프론트엔드 화면 구성 (Gradio Blocks)
-  features/              # 기능별 코드
-    __init__.py
-    shared.py            #   공용 글루 (VLM 캡션·깊이·인페인팅 합성)
-    clean_up.py          #   Clean Up (객체 지우기)
-    expand.py            #   Expand (프레임 확장/아웃페인팅)
-    reframe.py           #   Reframe (시점 변경, LDI 미리보기)
-  requirements.txt       # 의존성
-  scripts/setup_sharp.*  # SHARP 설치
-  common.py              # 공통 유틸: device 감지, 이미지 로드/resize
-  reframe_core.py        # depth 워핑 엔진
-  reframe_sharp.py       # SHARP 렌더
-  reframe_ldi.py         # LDI 2-레이어 (Expand·Reframe 미리보기)
-  reframe_layers.py      # 사람 빌보드 레이어링
-  splat_render.py        # 순수 PyTorch 3DGS 렌더러
-  inpaint.py             # 인페인팅 팩토리 (sd2 / lama / opencv)
-  task_detection_groundingdino.py    # Grounding DINO — open-vocab 탐지
-  task_segmentation_sam2.py          # SAM2 — 픽셀 세그멘테이션
-  task_vlm_qwen2vl.py                # Qwen2-VL-2B — 이미지 질의응답
-  task_depth_depthanythingv2.py      # Depth Anything V2 — 깊이 추정
-  task_nvs_sharp.py                  # Apple SHARP — 3D Gaussian 예측
-  task_inpaint_sd.py                 # SDXL 인페인팅 (1024px)
-  task_inpaint_lama.py               # LaMa 인페인팅
-  task_pose_vitpose.py               # ViTPose — 관절 키포인트
-  sample.jpg             # 샘플 입력 이미지
-  outputs/               # 결과 저장 폴더 (git 제외)
+  app.py                 # 실행 진입점
+  ui.py                  # Gradio UI
+  features/
+    shared.py            # VLM 캡션 · 인페인팅 합성
+    clean_up.py          # Clean Up
+    expand.py            # Expand (LaMa + SDXL)
+    reframe.py           # Reframe (gsplat + SD1.5)
+  reframe_yaw.py         # yaw×pitch 프리렌더 그리드
+  sharp_render.py        # SHARP + gsplat 렌더
+  splat_torch.py         # gsplat 불가 시 PyTorch 폴백
+  inpaint.py             # 인페인팅 팩토리 (sd2 / sd15 / lama / opencv)
+  task_*.py              # 중간 과제 단독 스크립트
+  task_inpaint_sd.py     # SDXL
+  task_inpaint_sd15.py   # SD 1.5
+  scripts/setup.ps1      # Windows: Python 3.10 + .venv 일괄 설치
+  requirements.txt
+  third_party/ml-sharp   # SHARP (setup.ps1 에서 editable install)
+  sample.jpg
+  outputs/               # 결과 (git 제외)
 ```
 
 ---

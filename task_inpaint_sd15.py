@@ -1,17 +1,15 @@
 """
-task_inpaint_sd.py — Generative Image Inpainting
-모델: SDXL Inpainting (diffusers/stable-diffusion-xl-1.0-inpainting-0.1)
+task_inpaint_sd15.py — SD 1.5 Generative Image Inpainting
+모델: runwayml/stable-diffusion-inpainting
 
-1024px 네이티브 · 큰 마스크(아웃페인팅)에 SD1.5보다 적합.
-텍스트 프롬프트로 채울 내용을 유도하는 생성형 인페인팅 (clean up / expand / reframe 공용).
-
+512px 네이티브 · Reframe 바깥 영역 등 좁은 마스크·빠른 생성에 적합.
 8GB VRAM: fp16 + attention/vae slicing (순차 load/unload 필수).
 
 사용법(단독):
-    python task_inpaint_sd.py --image sample.jpg --prompt "wooden floor"
+    python task_inpaint_sd15.py --image sample.jpg --prompt "wooden floor"
 
 공통 인터페이스:
-    SDXLInpainter(device).inpaint(image_pil, hole_mask, prompt=None) -> PIL.Image
+    SD15Inpainter(device).inpaint(image_pil, hole_mask, prompt=None) -> PIL.Image
 """
 
 from __future__ import annotations
@@ -24,8 +22,8 @@ from PIL import Image
 
 from common import get_device, get_dtype, free_memory, mask_to_pil, composite_hole
 
-MODEL_ID = "diffusers/stable-diffusion-xl-1.0-inpainting-0.1"
-INPAINT_LONG = 1024   # SDXL 네이티브 해상도(긴 변) — 512 대비 아웃페인팅 품질↑
+MODEL_ID = "runwayml/stable-diffusion-inpainting"
+INPAINT_LONG = 512
 
 DEFAULT_PROMPT = "seamless natural background, photorealistic, high quality, sharp focus"
 NEGATIVE_PROMPT = (
@@ -40,7 +38,7 @@ def _align8(n: int) -> int:
 
 
 def _resize_for_inpaint(image: Image.Image, mask: Image.Image, long: int = INPAINT_LONG):
-    """SDXL 입력: 긴 변 long, 8의 배수. (리사이즈 PIL, 원본 W,H) 반환."""
+    """SD1.5 입력: 긴 변 long, 8의 배수. (리사이즈 PIL, 원본 W,H) 반환."""
     W, H = image.size
     scale = long / max(W, H)
     rw, rh = _align8(W * scale), _align8(H * scale)
@@ -51,27 +49,26 @@ def _resize_for_inpaint(image: Image.Image, mask: Image.Image, long: int = INPAI
     )
 
 
-class SDXLInpainter:
-    """SDXL Inpainting. prompt 로 채울 내용을 유도."""
+class SD15Inpainter:
+    """SD 1.5 Inpainting. prompt 로 채울 내용을 유도."""
 
     def __init__(self, device: Optional[str] = None):
         self.device = device or get_device()
         self.pipe = None
 
     def load(self):
-        from diffusers import StableDiffusionXLInpaintPipeline
+        from diffusers import StableDiffusionInpaintPipeline
 
-        print(f"[inpaint:sdxl] Loading {MODEL_ID}")
+        print(f"[inpaint:sd15] Loading {MODEL_ID}")
         dtype = get_dtype(self.device)
-        kwargs = {"torch_dtype": dtype, "use_safetensors": True}
-        if self.device == "cuda":
-            kwargs["variant"] = "fp16"
-        self.pipe = StableDiffusionXLInpaintPipeline.from_pretrained(MODEL_ID, **kwargs)
+        # runwayml 모델은 safetensors가 일부만 있어 .bin 로드 허용
+        kwargs = {"torch_dtype": dtype, "use_safetensors": False}
+        self.pipe = StableDiffusionInpaintPipeline.from_pretrained(MODEL_ID, **kwargs)
         if self.device == "cuda":
             self.pipe.enable_attention_slicing()
             self.pipe.enable_vae_slicing()
         self.pipe = self.pipe.to(self.device)
-        print(f"[inpaint:sdxl] ready on {self.device} ({dtype}) · long={INPAINT_LONG}")
+        print(f"[inpaint:sd15] ready on {self.device} ({dtype}) · long={INPAINT_LONG}")
         return self
 
     def unload(self):
@@ -87,14 +84,19 @@ class SDXLInpainter:
         steps: int = 25,
         guidance: float = 7.5,
         seed: Optional[int] = 0,
+        negative_prompt: Optional[str] = None,
+        long: Optional[int] = None,
     ) -> Image.Image:
         if self.pipe is None:
             self.load()
 
         if prompt is None:
             prompt = DEFAULT_PROMPT
+        if negative_prompt is None:
+            negative_prompt = NEGATIVE_PROMPT
+        inpaint_long = long if long is not None else INPAINT_LONG
         mask = mask_to_pil(hole_mask)
-        img_r, mask_r, W, H = _resize_for_inpaint(image, mask)
+        img_r, mask_r, W, H = _resize_for_inpaint(image, mask, long=inpaint_long)
 
         gen_dev = self.device if self.device in ("cuda", "mps") else "cpu"
         generator = (
@@ -103,7 +105,7 @@ class SDXLInpainter:
 
         result = self.pipe(
             prompt=prompt,
-            negative_prompt=NEGATIVE_PROMPT,
+            negative_prompt=negative_prompt,
             image=img_r,
             mask_image=mask_r,
             num_inference_steps=steps,
@@ -114,17 +116,13 @@ class SDXLInpainter:
         return composite_hole(image, result, hole_mask)
 
 
-def load_model(device: str) -> SDXLInpainter:
-    return SDXLInpainter(device).load()
+def load_model(device: str) -> SD15Inpainter:
+    return SD15Inpainter(device).load()
 
 
-def run(image: Image.Image, model: SDXLInpainter, hole_mask: np.ndarray,
+def run(image: Image.Image, model: SD15Inpainter, hole_mask: np.ndarray,
         prompt: Optional[str] = None) -> Image.Image:
     return model.inpaint(image, hole_mask, prompt=prompt)
-
-
-# 하위 호환
-SDInpainter = SDXLInpainter
 
 
 if __name__ == "__main__":
@@ -133,7 +131,7 @@ if __name__ == "__main__":
 
     from common import load_image, save_result
 
-    parser = argparse.ArgumentParser(description="SDXL inpainting 데모")
+    parser = argparse.ArgumentParser(description="SD 1.5 inpainting 데모")
     parser.add_argument("--image", type=str, required=True)
     parser.add_argument("--prompt", type=str, default=None)
     parser.add_argument("--box", type=float, default=0.25)
@@ -153,5 +151,5 @@ if __name__ == "__main__":
     inp.unload()
 
     stem = Path(args.image).stem
-    save_result(out, f"{stem}_sdxl.png")
+    save_result(out, f"{stem}_sd15.png")
     print("완료 → outputs/ 확인")

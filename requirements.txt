@@ -1,10 +1,11 @@
-# OpenEdit - iOS 27 photo-edit demo (Python 3.10+)
-# PyTorch: install CUDA/MPS build from https://pytorch.org first if needed
+# OpenEdit - Python 3.10 only (gsplat CUDA wheel on Windows)
+# Setup: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+# PyTorch CUDA build is installed by setup.ps1 (torch 2.4.1+cu124)
 
 torch>=2.1.0
 torchvision>=0.16.0
 transformers>=4.45.0
-diffusers>=0.27.0
+diffusers>=0.27.0,<0.37.0
 accelerate>=0.27.0
 gradio>=4.44.0
 opencv-python>=4.8.0

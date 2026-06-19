@@ -107,6 +107,7 @@ def clean_up_prepare(image: Image.Image):
         gr.update(value=_editor_value(img_np), visible=True),
         "Clean Up: 지우고 싶은 객체를 **브러시로 문질러서 선택**하세요. (텍스트 검색도 가능)",
         HIDDEN, HIDDEN, VISIBLE,
+        gr.skip(), gr.skip(),
     )
 
 

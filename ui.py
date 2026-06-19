@@ -1,12 +1,5 @@
 """
-ui.py — OpenEdit 프론트엔드 화면 구성 (Gradio)
-
-iOS 27 사진편집 3기능(Clean Up · Expand · Reframe)의 화면 레이아웃과
-버튼/슬라이더 이벤트 와이어링만 담당한다. 실제 기능 로직은 features/* 에 있다.
-
-UX (애플과 동일):
-  좌측에 사진 업로드 → 우측 기능 버튼 클릭 → 잠깐 대기
-  → 슬라이더/브러시로 즉시 미리보기(빈 곳은 블러) → [완료] SD2 인페인팅 → 다운로드.
+ui.py — OpenEdit Gradio UI (Clean Up · Expand · Reframe)
 """
 
 from __future__ import annotations
@@ -14,14 +7,20 @@ from __future__ import annotations
 import gradio as gr
 
 from features import clean_up, expand, reframe
+from features.reframe import (
+    YAW_IDX_MIN, YAW_IDX_MAX, YAW_STEP,
+    PITCH_IDX_MIN, PITCH_IDX_MAX, PITCH_STEP,
+    YAW_RANGE_DEG, PITCH_RANGE_DEG,
+    ANGLE_STEP,
+)
 
 
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="OpenEdit — iOS 사진편집") as demo:
         gr.Markdown(
             "# OpenEdit\n"
-            "**iOS 27 사진편집 (Clean Up · Expand · Reframe)** — "
-            "SHARP · Depth Anything V2 · SAM2 · Grounding DINO · Qwen2-VL · SDXL"
+            "**iOS 27 (Clean Up · Expand · Reframe)** — "
+            "SHARP · gsplat · SAM2 · LaMa · SDXL"
         )
 
         st_scene = gr.State()
@@ -55,10 +54,8 @@ def build_ui() -> gr.Blocks:
                 btn_expand = gr.Button("Expand · 확장", size="lg")
                 btn_reframe = gr.Button("Reframe · 시점 변경", size="lg", variant="primary")
 
-                gr.Markdown("**인페인팅: SDXL** (1024px · VLM 프롬프트)")
-
                 with gr.Group(visible=False) as grp_clean_up:
-                    gr.Markdown("**Clean Up** — 지우고 싶은 객체를 브러시로 문질러서 선택")
+                    gr.Markdown("**Clean Up** — 브러시/텍스트로 객체 선택 후 제거")
                     clean_up_prompt = gr.Textbox(
                         label="텍스트 검색 (선택)",
                         placeholder="person . bottle . cup .",
@@ -69,35 +66,42 @@ def build_ui() -> gr.Blocks:
                     btn_clean_up_commit = gr.Button("완료 (제거)", variant="primary")
 
                 with gr.Group(visible=False) as grp_expand:
-                    gr.Markdown(
-                        "**Expand** — LaMa 미리보기 배경 → 슬라이더 조절 → "
-                        "[완료] SD 고품질 생성"
-                    )
+                    gr.Markdown("**Expand** — LaMa 미리보기 → [완료] SDXL")
                     extend = gr.Slider(
                         1.0, 1.6, 1.0, step=0.02,
-                        label="프레임 축소 (1.0=원본, 1.6=최대 확장)",
+                        label="프레임 축소 (1.0=원본, 1.6=최대)",
                     )
                     btn_expand_commit = gr.Button("완료 (SD 생성)", variant="primary")
 
                 with gr.Group(visible=False) as grp_reframe:
-                    gr.Markdown("**Reframe** — 마치 사진을 찍기 전 각도를 바꾸는 것처럼 시점 변경 (SHARP 단일 루트)")
-                    gr.Markdown("💡 슬라이더를 움직이면 **SHARP 미리보기**(사전 렌더 격자)로 즉시 확인 · 바깥은 블러. [완료]는 정확한 각도로 재렌더 + SD2 생성")
-                    yaw = gr.Slider(-16, 16, 0, step=0.5, label="좌우 회전 yaw° (소폭 권장: ±12° 이내)")
-                    pitch = gr.Slider(-10, 10, 0, step=0.5, label="상하 회전 pitch° (소폭 권장: ±8° 이내)")
-                    btn_reframe_commit = gr.Button("완료 — SD2로 바깥 영역 생성 (로딩 시간 소요)", variant="primary")
+                    gr.Markdown("**Reframe** — yaw 좌우 · pitch 상하")
+                    gr.Markdown(
+                        f"슬라이더 **수치** (각도 아님) · **1당 {ANGLE_STEP:g}°** · "
+                        f"좌우 **{YAW_IDX_MIN}~{YAW_IDX_MAX}** (최대 ±{YAW_RANGE_DEG:g}°) · "
+                        f"상하 **{PITCH_IDX_MIN}~{PITCH_IDX_MAX}** (최대 ±{PITCH_RANGE_DEG:g}°) · "
+                        f"{(YAW_IDX_MAX - YAW_IDX_MIN + 1) * (PITCH_IDX_MAX - PITCH_IDX_MIN + 1)}프레임"
+                    )
+                    yaw = gr.Slider(
+                        minimum=YAW_IDX_MIN, maximum=YAW_IDX_MAX, value=0, step=YAW_STEP,
+                        label=f"좌우 ({YAW_IDX_MIN}~{YAW_IDX_MAX}, ×{ANGLE_STEP:g}°)",
+                    )
+                    pitch = gr.Slider(
+                        minimum=PITCH_IDX_MIN, maximum=PITCH_IDX_MAX, value=0, step=PITCH_STEP,
+                        label=f"상하 ({PITCH_IDX_MIN}~{PITCH_IDX_MAX}, ×{ANGLE_STEP:g}°)",
+                    )
+                    btn_reframe_commit = gr.Button("완료 — SD1.5 바깥 생성", variant="primary")
 
                 status = gr.Markdown("사진을 업로드한 뒤 기능 버튼을 누르세요.")
 
         canvas_vis = [canvas, clean_up_editor]
         mode_outs = [status, grp_reframe, grp_expand, grp_clean_up]
-        analyze_outs = [*edit_states, *canvas_vis, *mode_outs]
+        angle_outs = [yaw, pitch]
+        analyze_outs = [*edit_states, *canvas_vis, *mode_outs, *angle_outs]
 
-        # ── 기능 버튼 → 분석/준비 ──
         btn_clean_up.click(clean_up.clean_up_prepare, inputs=[canvas], outputs=analyze_outs)
         btn_expand.click(expand.expand_analyze, inputs=[canvas], outputs=analyze_outs)
         btn_reframe.click(reframe.reframe_analyze, inputs=[canvas], outputs=analyze_outs)
 
-        # ── Clean Up ──
         clean_up_editor.change(
             clean_up.clean_up_brush,
             inputs=[st_mode, st_img, st_mask, clean_up_editor],
@@ -119,8 +123,6 @@ def build_ui() -> gr.Blocks:
             outputs=[canvas, clean_up_editor, st_img, status],
         )
 
-        # ── Expand ──
-        # 매 틱은 가벼운 작업(블러 배경 재사용 + BILINEAR 축소)이라 .change 로도 부드럽다.
         extend.change(
             expand.expand_view,
             inputs=[st_disp, st_plate, st_img, extend],
@@ -132,12 +134,11 @@ def build_ui() -> gr.Blocks:
             outputs=[canvas, status],
         )
 
-        # ── Reframe ──
-        reframe_view_in = [st_scene, st_disp, st_plate, st_img, yaw, pitch]
-        for s in [yaw, pitch]:
-            s.change(
+        reframe_in = [st_scene, st_disp, st_plate, st_img, yaw, pitch]
+        for ctrl in (yaw, pitch):
+            ctrl.change(
                 reframe.reframe_view,
-                inputs=reframe_view_in,
+                inputs=reframe_in,
                 outputs=canvas, show_progress="hidden",
             )
         btn_reframe_commit.click(
