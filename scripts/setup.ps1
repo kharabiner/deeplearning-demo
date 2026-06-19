@@ -24,7 +24,7 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -m pip install ninja
 & $py -m pip install "gsplat==1.5.3+pt24cu124" --index-url https://docs.gsplat.studio/whl/pt24cu124/ --extra-index-url https://pypi.org/simple/
 & $py -m pip install -r requirements.txt
-& $py -m pip install gradio==6.18.0 diffusers==0.36.0 transformers==5.5.0 accelerate==1.13.0 `
+& $py -m pip install gradio==6.18.0 diffusers==0.36.0 transformers==5.5.0 accelerate==1.13.0 peft==0.19.1 `
     opencv-python==4.11.0.86 timm==1.0.26 simple-lama-inpainting==0.1.1 qwen-vl-utils==0.0.14 `
     "imageio[ffmpeg]"
 & $py -m pip install -e third_party/ml-sharp

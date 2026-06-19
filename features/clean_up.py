@@ -99,6 +99,8 @@ def _extract_stroke_mask(editor_value, H: int, W: int) -> np.ndarray:
 def clean_up_prepare(image: Image.Image):
     if image is None:
         raise gr.Error("먼저 왼쪽에 사진을 업로드하세요.")
+    rinp.unload_expand_sd15()
+    free_memory(DEVICE)
     small = resize_if_needed(image.convert("RGB"), max_size=PREVIEW_MAX)
     img_np = pil_to_numpy(small)
     return (

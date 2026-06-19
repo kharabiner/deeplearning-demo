@@ -69,7 +69,7 @@ class SDXLInpainter:
         self.pipe = StableDiffusionXLInpaintPipeline.from_pretrained(MODEL_ID, **kwargs)
         if self.device == "cuda":
             self.pipe.enable_attention_slicing()
-            self.pipe.enable_vae_slicing()
+            self.pipe.vae.enable_slicing()
         self.pipe = self.pipe.to(self.device)
         print(f"[inpaint:sdxl] ready on {self.device} ({dtype}) · long={INPAINT_LONG}")
         return self
@@ -87,14 +87,17 @@ class SDXLInpainter:
         steps: int = 25,
         guidance: float = 7.5,
         seed: Optional[int] = 0,
+        long: Optional[int] = None,
     ) -> Image.Image:
         if self.pipe is None:
             self.load()
 
         if prompt is None:
             prompt = DEFAULT_PROMPT
+        inpaint_long = long if long is not None else INPAINT_LONG
         mask = mask_to_pil(hole_mask)
-        img_r, mask_r, W, H = _resize_for_inpaint(image, mask)
+        img_r, mask_r, W, H = _resize_for_inpaint(image, mask, long=inpaint_long)
+        print(f"[inpaint:sdxl] infer · long={inpaint_long} · steps={steps} · {img_r.size[0]}×{img_r.size[1]}")
 
         gen_dev = self.device if self.device in ("cuda", "mps") else "cpu"
         generator = (

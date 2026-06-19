@@ -6,7 +6,7 @@ iOS 27 "Expand" 재현: 사진 프레임을 축소해 바깥쪽 여백을 노출
 
   - 분석(1회): LaMa 로 최대 확장 미리보기 배경 생성 (프롬프트 없음, 주변 맥락)
   - 드래그: LaMa 배경을 슬라이더와 같이 줌 + 원본 축소·페더 합성 (가벼움)
-  - [완료]: SD 입력만 검은 캔버스+원본 (LaMa 미포함) — 미리보기와 분리
+  - [완료]: DreamShaper SD1.5 inpaint — LaMa 맥락 캔버스
 
 UI 흐름:
   expand_analyze → (슬라이더) expand_view → expand_commit
@@ -18,9 +18,11 @@ import gradio as gr
 import numpy as np
 from PIL import Image
 
-from common import pil_to_numpy, numpy_to_pil, resize_if_needed
+from common import pil_to_numpy, numpy_to_pil, resize_if_needed, free_memory
+import inpaint as rinp
+from task_inpaint_sd15 import EXPAND_MODEL_ID
 from .shared import (
-    PREVIEW_MAX, HIDDEN, VISIBLE,
+    DEVICE, PREVIEW_MAX, HIDDEN, VISIBLE,
     inpaint_commit, dilate_mask, feather_composite,
 )
 
@@ -28,9 +30,15 @@ BACKDROP_SIGMA = 24.0   # LaMa 시드용 가우시안 블러(분석 1회)
 FEATHER_FRAC = 0.025    # 선명/배경 경계 페더 폭(이미지 짧은 변 대비)
 MAX_EXTEND = 1.6        # LaMa 미리보기 배경 생성 기준(슬라이더 최대와 일치)
 
-# SDXL 확정용 — 장면 묘사 없이 최소만 (빈 프롬프트+guidance 1 은 검은 출력 유발)
-EXPAND_SDXL_PROMPT = "high quality photograph, seamless natural background continuation"
-EXPAND_SDXL_GUIDANCE = 4.0
+# DreamShaper SD1.5 inpaint — Expand [완료]
+EXPAND_SD15_PROMPT = "high quality photograph, seamless natural background continuation"
+EXPAND_SD15_GUIDANCE = 7.5
+EXPAND_SD15_STEPS = 25
+EXPAND_SD15_LONG = 512
+EXPAND_SD15_NEGATIVE = (
+    "new object, duplicate, extra limbs, "
+    "blurry, distorted, artifacts, watermark, text, low quality, deformed"
+)
 
 
 def _make_backdrop(img_np: np.ndarray) -> np.ndarray:
@@ -149,20 +157,22 @@ def _lama_backdrop(img_np, progress) -> np.ndarray:
     return pil_to_numpy(lama_pil)
 
 
-# ── 1) 분석 (LaMa 미리보기 배경 1회 생성) ─────────────────────────────────────
+# ── 1) 분석 (LaMa만 — SD 로드 없음) ───────────────────────────────────────────
 def expand_analyze(image, progress=gr.Progress()):
     if image is None:
         raise gr.Error("먼저 왼쪽에 사진을 업로드하세요.")
+    rinp.unload_expand_sd15()
+    free_memory(DEVICE)
     progress(0.05, desc="Expand — 준비 중...")
     small = resize_if_needed(image.convert("RGB"), max_size=PREVIEW_MAX)
     img_np = pil_to_numpy(small)
     progress(0.15, desc="Expand — LaMa 미리보기 배경 생성")
-    backdrop = _lama_backdrop(img_np, progress)   # st_plate 에 저장
+    backdrop = _lama_backdrop(img_np, progress)
     return (
         None, None, backdrop, img_np, None, "expand",
         gr.update(value=img_np, visible=True),
         HIDDEN,
-        "✅ Expand 준비 · LaMa 미리보기 배경 완료 → 슬라이더 조절 → [완료] SD 고품질 생성",
+        "✅ Expand 준비 · LaMa 미리보기 → 슬라이더 조절 → [완료] DreamShaper SD1.5",
         HIDDEN, VISIBLE, HIDDEN,
         gr.skip(), gr.skip(),
     )
@@ -176,7 +186,7 @@ def expand_view(_disp, backdrop, img_np, extend):
     return _view(img_np, backdrop, extend)
 
 
-# ── 3) 확정 (SDXL — LaMa 맥락 + 최소 프롬프트) ───────────────────────────────────
+# ── 3) 확정 (DreamShaper SD1.5 inpaint) ───────────────────────────────────────
 def expand_commit(_disp, backdrop, img_np, extend, progress=gr.Progress()):
     if img_np is None:
         raise gr.Error("먼저 Expand를 실행하세요.")
@@ -186,16 +196,29 @@ def expand_commit(_disp, backdrop, img_np, extend, progress=gr.Progress()):
         progress(0.1, desc="LaMa 배경 생성")
         backdrop = _lama_backdrop(img_np, progress)
     progress(0.2, desc="프레임 확장")
-    # SDXL 입력: 줌된 LaMa 배경(가장자리 맥락) + 선명 원본
-    # 검은 캔버스 + guidance 1 은 SDXL 이 마스크를 채우지 않고 검은색 유지함
     bd = _scaled_lama_backdrop(backdrop, extend, fast=False)
     canvas, outer = _compose(img_np, extend, backdrop=bd, fast=False)
     fill = dilate_mask(outer, iterations=2)
     canvas_pil = numpy_to_pil(canvas)
-    result_pil, msg = inpaint_commit(
-        canvas_pil, fill, progress,
-        desc="아웃페인팅", backend="sd2",
-        prompt=EXPAND_SDXL_PROMPT, sd_guidance=EXPAND_SDXL_GUIDANCE,
-    )
+    free_memory(DEVICE)
+    progress(0.35, desc="DreamShaper SD1.5 로드")
+    try:
+        inp = rinp.preload_expand_sd15(DEVICE)
+        progress(0.6, desc="아웃페인팅 — DreamShaper")
+        result_pil = inp.inpaint(
+            canvas_pil, fill,
+            prompt=EXPAND_SD15_PROMPT,
+            guidance=EXPAND_SD15_GUIDANCE,
+            steps=EXPAND_SD15_STEPS,
+            long=EXPAND_SD15_LONG,
+            negative_prompt=EXPAND_SD15_NEGATIVE,
+        )
+    except Exception as e:
+        raise gr.Error(f"아웃페인팅 실패(DreamShaper): {e}")
     result_pil = feather_composite(canvas_pil, result_pil, fill, feather=3.0)
+    model_short = EXPAND_MODEL_ID.split("/")[-1]
+    msg = (
+        f"완료 · {model_short} {EXPAND_SD15_STEPS}step · "
+        f"prompt={EXPAND_SD15_PROMPT[:40]} · 우상단 아이콘으로 다운로드"
+    )
     return result_pil, msg

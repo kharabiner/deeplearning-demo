@@ -71,11 +71,13 @@ def vlm_caption_reframe(image: Image.Image) -> str:
 def inpaint_commit(
     image_pil, fill, progress, desc="인페인팅",
     prompt=None, caption_fn=None, backend="sd2", sd_guidance=7.5,
+    sd_long=None, sd_steps=None, sd_negative=None,
 ):
     """인페인팅 실행. (결과 PIL, 상태 메시지) 반환.
 
-    backend="lama" : 프롬프트 없이 주변 맥락으로 채움 (Expand 아웃페인팅 권장)
-    backend="sd2"  : SDXL 인페인팅 + 텍스트 프롬프트 (Clean Up 등)
+    backend="lama" : 프롬프트 없이 주변 맥락으로 채움
+    backend="sd2"  : SDXL (Clean Up 등)
+    backend="sd15" : SD 1.5 (Expand [완료] — SDXL 대비 빠름)
     """
     if int(fill.sum()) < 30:
         return image_pil, "완료 · 채울 영역 없음"
@@ -90,18 +92,28 @@ def inpaint_commit(
             raise gr.Error(f"{desc} 실패(LaMa): {e}")
         return result, f"완료 · LaMa(프롬프트 없음, 주변 맥락) · 우상단 아이콘으로 다운로드"
 
+    use_sd15 = backend in ("sd15", "sd1.5", "sd-1.5")
+    label = "SD1.5" if use_sd15 else "SDXL"
     if prompt is None:
         prompt = (caption_fn or vlm_caption)(image_pil)
-    progress(0.6, desc=f"{desc} — SDXL")
+    progress(0.6, desc=f"{desc} — {label}")
     try:
-        inp = rinp.get_inpainter("sd2", DEVICE)
-        result = inp.inpaint(image_pil, fill, prompt=prompt, guidance=sd_guidance)
+        inp = rinp.get_inpainter("sd15" if use_sd15 else "sd2", DEVICE)
+        kw = {"prompt": prompt, "guidance": sd_guidance}
+        if sd_long is not None:
+            kw["long"] = sd_long
+        if sd_steps is not None:
+            kw["steps"] = sd_steps
+        if sd_negative is not None:
+            kw["negative_prompt"] = sd_negative
+        result = inp.inpaint(image_pil, fill, **kw)
         inp.unload()
+        free_memory(DEVICE)
     except Exception as e:
-        raise gr.Error(f"{desc} 실패(SDXL): {e}")
+        raise gr.Error(f"{desc} 실패({label}): {e}")
 
     prompt_label = "(없음, 이미지 맥락)" if prompt == "" else prompt[:50]
-    return result, f"완료 · SDXL · prompt={prompt_label} · 우상단 아이콘으로 다운로드"
+    return result, f"완료 · {label} · prompt={prompt_label} · 우상단 아이콘으로 다운로드"
 
 
 # ── 합성/마스크 헬퍼 ────────────────────────────────────────────────────────────

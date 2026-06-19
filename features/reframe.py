@@ -12,6 +12,7 @@ import gradio as gr
 import numpy as np
 
 from common import pil_to_numpy, numpy_to_pil, resize_if_needed, free_memory
+import inpaint as rinp
 import sharp_render
 import reframe_yaw
 import task_nvs_sharp
@@ -130,6 +131,9 @@ def _present(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarray:
 def reframe_analyze(image, progress=gr.Progress()):
     if image is None:
         raise gr.Error("먼저 왼쪽에 사진을 업로드하세요.")
+
+    rinp.unload_expand_sd15()
+    free_memory(DEVICE)
 
     try:
         sharp_render.require_cuda()

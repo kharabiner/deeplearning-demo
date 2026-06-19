@@ -19,3 +19,4 @@ pillow-avif-plugin>=1.4.0
 timm>=0.9.0
 plyfile>=1.0.0
 safetensors>=0.4.0
+peft>=0.17.0

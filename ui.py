@@ -66,7 +66,7 @@ def build_ui() -> gr.Blocks:
                     btn_clean_up_commit = gr.Button("완료 (제거)", variant="primary")
 
                 with gr.Group(visible=False) as grp_expand:
-                    gr.Markdown("**Expand** — LaMa 미리보기 → [완료] SDXL")
+                    gr.Markdown("**Expand** — LaMa 미리보기 → [완료] DreamShaper SD1.5")
                     extend = gr.Slider(
                         1.0, 1.6, 1.0, step=0.02,
                         label="프레임 축소 (1.0=원본, 1.6=최대)",

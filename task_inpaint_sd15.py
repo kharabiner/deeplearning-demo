@@ -23,6 +23,7 @@ from PIL import Image
 from common import get_device, get_dtype, free_memory, mask_to_pil, composite_hole
 
 MODEL_ID = "runwayml/stable-diffusion-inpainting"
+EXPAND_MODEL_ID = "Lykon/dreamshaper-8-inpainting"  # Expand [완료] — SD1.5 inpaint 파인튠
 INPAINT_LONG = 512
 
 DEFAULT_PROMPT = "seamless natural background, photorealistic, high quality, sharp focus"
@@ -52,21 +53,28 @@ def _resize_for_inpaint(image: Image.Image, mask: Image.Image, long: int = INPAI
 class SD15Inpainter:
     """SD 1.5 Inpainting. prompt 로 채울 내용을 유도."""
 
-    def __init__(self, device: Optional[str] = None):
+    def __init__(self, device: Optional[str] = None, model_id: str = MODEL_ID):
         self.device = device or get_device()
+        self.model_id = model_id
         self.pipe = None
 
     def load(self):
         from diffusers import StableDiffusionInpaintPipeline
 
-        print(f"[inpaint:sd15] Loading {MODEL_ID}")
+        print(f"[inpaint:sd15] Loading {self.model_id}")
         dtype = get_dtype(self.device)
-        # runwayml 모델은 safetensors가 일부만 있어 .bin 로드 허용
-        kwargs = {"torch_dtype": dtype, "use_safetensors": False}
-        self.pipe = StableDiffusionInpaintPipeline.from_pretrained(MODEL_ID, **kwargs)
+        kwargs = {
+            "torch_dtype": dtype,
+            "use_safetensors": True,
+            "safety_checker": None,
+            "requires_safety_checker": False,
+        }
+        if self.device == "cuda":
+            kwargs["variant"] = "fp16"
+        self.pipe = StableDiffusionInpaintPipeline.from_pretrained(self.model_id, **kwargs)
         if self.device == "cuda":
             self.pipe.enable_attention_slicing()
-            self.pipe.enable_vae_slicing()
+            self.pipe.vae.enable_slicing()
         self.pipe = self.pipe.to(self.device)
         print(f"[inpaint:sd15] ready on {self.device} ({dtype}) · long={INPAINT_LONG}")
         return self
@@ -97,6 +105,7 @@ class SD15Inpainter:
         inpaint_long = long if long is not None else INPAINT_LONG
         mask = mask_to_pil(hole_mask)
         img_r, mask_r, W, H = _resize_for_inpaint(image, mask, long=inpaint_long)
+        print(f"[inpaint:sd15] infer · long={inpaint_long} · steps={steps} · {img_r.size[0]}×{img_r.size[1]}")
 
         gen_dev = self.device if self.device in ("cuda", "mps") else "cpu"
         generator = (
@@ -114,6 +123,16 @@ class SD15Inpainter:
         ).images[0].resize((W, H), Image.LANCZOS)
 
         return composite_hole(image, result, hole_mask)
+
+
+class ExpandSD15Inpainter(SD15Inpainter):
+    """Expand [완료] 전용 — DreamShaper inpaint (세션 동안 GPU 상주)."""
+
+    def __init__(self, device: Optional[str] = None):
+        super().__init__(device, model_id=EXPAND_MODEL_ID)
+
+    def is_ready(self) -> bool:
+        return self.pipe is not None
 
 
 def load_model(device: str) -> SD15Inpainter:
