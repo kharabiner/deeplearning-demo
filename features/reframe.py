@@ -11,6 +11,8 @@ from __future__ import annotations
 import gradio as gr
 import numpy as np
 
+from PIL import Image
+
 from common import pil_to_numpy, numpy_to_pil, resize_if_needed, free_memory
 import inpaint as rinp
 import sharp_render
@@ -19,10 +21,10 @@ import task_nvs_sharp
 from .shared import (
     DEVICE, PREVIEW_MAX, COMMIT_LONG,
     HIDDEN, VISIBLE,
-    SD15_PROMPT_REFRAME, feather_composite, dilate_mask, blur_holes,
+    SD15_PROMPT_REFRAME, dilate_mask, blur_holes,
 )
 
-ANGLE_STEP = 3.0
+ANGLE_STEP = 5.0
 
 # 슬라이더 = 정수 수치 (step 1). 실제 각도(°) = 수치 × ANGLE_STEP
 YAW_IDX_MIN = -16
@@ -38,16 +40,21 @@ MAX_DISPARITY = 0.10
 OUTER_BLUR_SIGMA = 8.0          # 미리보기용 (드래그)
 INPAINT_BLUR_SIGMA = 4.0        # SD 입력: 가벼운 맥락만
 ALPHA_HOLE_THRESH = 0.02
-ALPHA_SOFT_THRESH = 0.35        # gsplat 반투명 fringe → SD 마스크 포함
+ALPHA_SOFT_THRESH = 0.35        # gsplat 반투명 fringe (테두리용)
+ALPHA_SOLID_THRESH = 0.94       # 확실한 전경 — 인페인트 제외
+ALPHA_ARTIFACT_THRESH = 0.78    # 이보다 낮은 커버리지 = 잔상 후보
+SOLID_ERODE_ITER = 4
+CLEANUP_SHARPNESS_THRESH = 35.0
+CLEANUP_MIN_PIXELS = 400
+CLEANUP_STEPS = 22
 FILL_DILATE_ITER = 6
-FILL_TELEA_RATIO = 0.92         # 거의 전체가 구멍일 때만 telea
 SD15_STEPS = 30
 SD15_GUIDANCE = 8.0
 SD15_INPAINT_LONG = 768
 REFRAME_SD15_NEGATIVE = (
-    "new object, duplicate, extra limbs, "
+    "new object, duplicate, extra limbs, ghost, double image, smudge, haze, "
     "blurry, distorted, artifacts, watermark, text, low quality, deformed, "
-    "visible seam, harsh edge, smudge"
+    "visible seam, harsh edge"
 )
 
 # ui 호환 (슬라이더 step=1 index)
@@ -112,6 +119,91 @@ def _outer_fill_mask(alpha: np.ndarray) -> np.ndarray:
         return fringe | core
     except Exception:
         return core
+
+
+def _solid_core(alpha: np.ndarray) -> np.ndarray:
+    """확실한 전경(사람·가구) — erode 로 가장자리 보호."""
+    solid = alpha > ALPHA_SOLID_THRESH
+    if not solid.any():
+        return solid
+    try:
+        import cv2
+        k = np.ones((5, 5), np.uint8)
+        return cv2.erode(solid.astype(np.uint8), k, iterations=SOLID_ERODE_ITER).astype(bool)
+    except Exception:
+        return solid
+
+
+def _commit_fill_mask(alpha: np.ndarray) -> np.ndarray:
+    """[완료] SD 1차: 테두리 + 머리 뒤 내부 구멍 + 반투명 gsplat 잔상.
+
+    commit 해상도에서는 alpha=0 구멍이 없고 0.05~0.7 fringe 만 있는 경우가 많음
+    → soft 전역 포함 (dilate(holes) 만으로는 마스크가 비어 SD 가 스킵됨).
+    """
+    solid = _solid_core(alpha)
+    border = _outer_fill_mask(alpha)
+    holes = alpha < ALPHA_HOLE_THRESH
+    soft = alpha < ALPHA_ARTIFACT_THRESH
+    fill = border | holes | soft
+    return fill & ~solid
+
+
+def _local_sharpness(gray: np.ndarray) -> np.ndarray:
+    try:
+        import cv2
+        lap = cv2.Laplacian(gray.astype(np.float32), cv2.CV_32F, ksize=3)
+        return cv2.GaussianBlur(lap * lap, (0, 0), 5)
+    except Exception:
+        g = gray.astype(np.float32)
+        sharp = np.zeros_like(g)
+        dx = np.abs(g[:, 1:] - g[:, :-1])
+        dy = np.abs(g[1:, :] - g[:-1, :])
+        sharp[:, 1:] += dx
+        sharp[:, :-1] += dx
+        sharp[1:, :] += dy
+        sharp[:-1, :] += dy
+        return sharp
+
+
+def _residual_cleanup_mask(
+    alpha: np.ndarray,
+    inpainted_np: np.ndarray,
+    solid: np.ndarray,
+    initial_fill: np.ndarray,
+) -> np.ndarray:
+    """1차 SD 후에도 남는 반투명·뿌연 잔상 (확실한 전경·1차 채움 제외)."""
+    soft = alpha < 0.85
+    uncertain = alpha < 0.92
+    gray = np.dot(inpainted_np.astype(np.float32), [0.299, 0.587, 0.114])
+    blurry = _local_sharpness(gray) < CLEANUP_SHARPNESS_THRESH
+    return (soft | (uncertain & blurry)) & ~solid & ~initial_fill
+
+
+def _alpha_weighted_composite(
+    rgb: np.ndarray,
+    alpha: np.ndarray,
+    inpainted_pil: Image.Image,
+    fill_mask: np.ndarray,
+    *,
+    feather: float = 3.0,
+) -> Image.Image:
+    """선명 gsplat 코어 유지 + 채움/저알파 영역은 SD 결과."""
+    inp = pil_to_numpy(inpainted_pil).astype(np.float32)
+    orig = rgb.astype(np.float32)
+    if inp.shape != orig.shape:
+        inp = pil_to_numpy(
+            inpainted_pil.resize((orig.shape[1], orig.shape[0]), Image.LANCZOS)
+        ).astype(np.float32)
+    weight = fill_mask.astype(np.float32)
+    weight = np.maximum(weight, np.clip((0.92 - alpha) / 0.92, 0.0, 1.0))
+    try:
+        import cv2
+        weight = cv2.GaussianBlur(weight, (0, 0), feather)
+    except Exception:
+        pass
+    weight = np.clip(weight, 0.0, 1.0)[..., None]
+    out = orig * (1.0 - weight) + inp * weight
+    return numpy_to_pil(out.clip(0, 255).astype(np.uint8))
 
 
 def _inpaint_canvas(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarray:
@@ -226,37 +318,55 @@ def reframe_commit(scene, _disp, img_np, yaw_idx, pitch_idx, progress=gr.Progres
     preview = _present(rgb, alpha)
     free_memory(DEVICE)
     preview_pil = numpy_to_pil(preview)
-    sharp_pil = numpy_to_pil(rgb)
 
-    fill = dilate_mask(_outer_fill_mask(alpha), iterations=FILL_DILATE_ITER)
+    fill = dilate_mask(_commit_fill_mask(alpha), iterations=FILL_DILATE_ITER)
     fill_ratio = float(fill.sum()) / float(fill.size)
     tag = f"yaw={yaw_deg:g}° pitch={pitch_deg:g}°"
+    print(
+        f"[reframe] commit {tag} · fill={fill_ratio:.1%} ({int(fill.sum()):,} px)",
+        flush=True,
+    )
     if int(fill.sum()) < 30:
+        print("[reframe] skip DreamShaper — fill mask empty", flush=True)
         return preview_pil, f"✅ Reframe · {tag} · gsplat · 채울 영역 없음"
 
-    import inpaint as rinp
-
-    if fill_ratio > FILL_TELEA_RATIO:
-        inp = rinp.get_inpainter("opencv", DEVICE)
-        return inp.inpaint(preview_pil, fill), (
-            f"✅ Reframe · {tag} · gsplat + telea (빈 {fill_ratio:.0%})"
-        )
-
+    solid = _solid_core(alpha)
     canvas = _inpaint_canvas(rgb, alpha)
     canvas_pil = numpy_to_pil(canvas)
-
     prompt = SD15_PROMPT_REFRAME
+    sd_kw = dict(
+        prompt=prompt,
+        steps=SD15_STEPS,
+        guidance=SD15_GUIDANCE,
+        negative_prompt=REFRAME_SD15_NEGATIVE,
+        long=SD15_INPAINT_LONG,
+    )
+    cleanup = np.zeros_like(fill)
+    did_cleanup = False
     try:
         inp = rinp.get_inpainter("sd15", DEVICE)
-        result = inp.inpaint(
-            canvas_pil, fill, prompt=prompt,
-            steps=SD15_STEPS, guidance=SD15_GUIDANCE,
-            negative_prompt=REFRAME_SD15_NEGATIVE,
-            long=SD15_INPAINT_LONG,
+        print(f"[reframe] DreamShaper pass 1 · prompt={prompt[:50]!r}", flush=True)
+        progress(0.55, desc="Reframe — DreamShaper (테두리·구멍)")
+        result = inp.inpaint(canvas_pil, fill, **sd_kw)
+
+        cleanup = dilate_mask(
+            _residual_cleanup_mask(alpha, pil_to_numpy(result), solid, fill),
+            iterations=2,
         )
+        cleanup &= ~fill
+        if int(cleanup.sum()) >= CLEANUP_MIN_PIXELS:
+            print(f"[reframe] DreamShaper pass 2 cleanup · {int(cleanup.sum()):,} px", flush=True)
+            progress(0.78, desc="Reframe — DreamShaper (잔상 정리)")
+            result = inp.inpaint(
+                result, cleanup, **{**sd_kw, "steps": CLEANUP_STEPS},
+            )
+            fill = fill | cleanup
+            did_cleanup = True
+
         inp.unload()
     except Exception as e:
         raise gr.Error(f"인페인팅 실패: {e}")
 
-    result = feather_composite(sharp_pil, result, fill, feather=3.0)
-    return result, f"✅ Reframe · {tag} · gsplat + DreamShaper · fill={fill_ratio:.1%}"
+    result = _alpha_weighted_composite(rgb, alpha, result, fill)
+    cleanup_note = " + cleanup" if did_cleanup else ""
+    return result, f"✅ Reframe · {tag} · gsplat + DreamShaper{cleanup_note} · fill={fill_ratio:.1%}"

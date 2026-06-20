@@ -147,6 +147,7 @@ def build_ui() -> gr.Blocks:
             reframe.reframe_commit,
             inputs=[st_scene, st_disp, st_img, yaw, pitch],
             outputs=[canvas, status],
+            show_progress="full",
         )
 
     return demo

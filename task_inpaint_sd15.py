@@ -63,7 +63,7 @@ class SD15Inpainter:
     def load(self):
         from diffusers import StableDiffusionInpaintPipeline
 
-        print(f"[inpaint:sd15] Loading {self.model_id}")
+        print(f"[inpaint:sd15] Loading {self.model_id}", flush=True)
         dtype = get_dtype(self.device)
         kwargs = {
             "torch_dtype": dtype,
@@ -78,7 +78,7 @@ class SD15Inpainter:
             self.pipe.enable_attention_slicing()
             self.pipe.vae.enable_slicing()
         self.pipe = self.pipe.to(self.device)
-        print(f"[inpaint:sd15] ready on {self.device} ({dtype}) · long={INPAINT_LONG}")
+        print(f"[inpaint:sd15] ready on {self.device} ({dtype}) · long={INPAINT_LONG}", flush=True)
         return self
 
     def unload(self):
@@ -107,7 +107,7 @@ class SD15Inpainter:
         inpaint_long = long if long is not None else INPAINT_LONG
         mask = mask_to_pil(hole_mask)
         img_r, mask_r, W, H = _resize_for_inpaint(image, mask, long=inpaint_long)
-        print(f"[inpaint:sd15] infer · long={inpaint_long} · steps={steps} · {img_r.size[0]}×{img_r.size[1]}")
+        print(f"[inpaint:sd15] infer · long={inpaint_long} · steps={steps} · {img_r.size[0]}×{img_r.size[1]}", flush=True)
 
         gen_dev = self.device if self.device in ("cuda", "mps") else "cpu"
         generator = (

@@ -24,6 +24,12 @@ from ui import build_ui
 
 
 if __name__ == "__main__":
+    import os
+    import sys
+
+    os.environ.setdefault("PYTHONUNBUFFERED", "1")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
     parser = argparse.ArgumentParser(description="OpenEdit Gradio app")
     parser.add_argument("--share", action="store_true")
     parser.add_argument("--port", type=int, default=7860)
