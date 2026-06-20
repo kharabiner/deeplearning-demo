@@ -116,31 +116,26 @@ def yaw_offset_m(
     )[0]
 
 
+# compute_max_offset() lateral 1× ↔ degree (SHARP swipe 단위, 상한·클램프 없음)
+_OFFSET_REF_YAW_DEG = 48.0
+_OFFSET_REF_PITCH_DEG = 15.0
+
+
 def view_to_eye(
     yaw_deg: float,
     pitch_deg: float,
-    yaw_max_deg: float,
-    pitch_max_deg: float,
     offset_x_m: float,
     offset_y_m: float,
 ) -> torch.Tensor:
-    """yaw/pitch° → 카메라 eye (SHARP lateral X/Y 선형 매핑)."""
-    if abs(yaw_max_deg) < 1e-6:
-        tx = 0.0
-    else:
-        t = float(yaw_deg) / float(yaw_max_deg)
-        tx = offset_x_m * max(-1.0, min(1.0, t))
-    if abs(pitch_max_deg) < 1e-6:
-        ty = 0.0
-    else:
-        t = float(pitch_deg) / float(pitch_max_deg)
-        ty = offset_y_m * max(-1.0, min(1.0, t))
+    """yaw/pitch° → 카메라 eye (SHARP lateral X/Y, 선형·무제한)."""
+    tx = offset_x_m * float(yaw_deg) / _OFFSET_REF_YAW_DEG
+    ty = offset_y_m * float(pitch_deg) / _OFFSET_REF_PITCH_DEG
     return torch.tensor([tx, ty, 0.0], dtype=torch.float32)
 
 
-def yaw_to_eye(yaw_deg: float, yaw_max_deg: float, offset_x_m: float) -> torch.Tensor:
+def yaw_to_eye(yaw_deg: float, offset_x_m: float) -> torch.Tensor:
     """yaw° → 카메라 eye position (pitch=0)."""
-    return view_to_eye(yaw_deg, 0.0, yaw_max_deg, 1.0, offset_x_m, 0.0)
+    return view_to_eye(yaw_deg, 0.0, offset_x_m, 0.0)
 
 
 def setup_camera(gaussians, width: int, height: int, f_px: float, device: torch.device):
@@ -169,8 +164,6 @@ def render_view(
     yaw_deg: float,
     pitch_deg: float = 0.0,
     *,
-    yaw_max_deg: float = 16.0,
-    pitch_max_deg: float = 5.0,
     out_long: int = 1024,
     max_disparity: float = 0.08,
     offset_x_m: Optional[float] = None,
@@ -198,9 +191,7 @@ def render_view(
         if offset_y_m is None:
             offset_y_m = oy
 
-    eye = view_to_eye(
-        yaw_deg, pitch_deg, yaw_max_deg, pitch_max_deg, offset_x_m, offset_y_m,
-    )
+    eye = view_to_eye(yaw_deg, pitch_deg, offset_x_m, offset_y_m)
     cam = camera_model.compute(eye)
 
     if gsplat_cuda_ready():
@@ -236,7 +227,6 @@ def render_yaw(
     scene: SharpScene,
     yaw_deg: float,
     *,
-    yaw_max_deg: float = 16.0,
     out_long: int = 1024,
     max_disparity: float = 0.08,
     offset_x_m: Optional[float] = None,
@@ -250,8 +240,6 @@ def render_yaw(
         scene,
         yaw_deg,
         0.0,
-        yaw_max_deg=yaw_max_deg,
-        pitch_max_deg=1.0,
         out_long=out_long,
         max_disparity=max_disparity,
         offset_x_m=offset_x_m,

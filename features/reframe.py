@@ -2,7 +2,7 @@
 features/reframe.py — Reframe · yaw/pitch · gsplat · 프리렌더 그리드
 
   슬라이더: 정수 수치 (좌우 -16~+16, 상하 -5~+5) — 각도 아님
-  실제 회전: 수치 × 3°  (예: 16 → 48°, -5 → -15°)
+  실제 회전: 수치 × ANGLE_STEP  (기본 3°/칸 → 16 → 48°, -5 → -15°)
   [완료]: 동일 gsplat 정확 각도 + 바깥 DreamShaper
 """
 
@@ -24,7 +24,7 @@ from .shared import (
     SD15_PROMPT_REFRAME, dilate_mask, blur_holes,
 )
 
-ANGLE_STEP = 5.0
+ANGLE_STEP = 10.0
 
 # 슬라이더 = 정수 수치 (step 1). 실제 각도(°) = 수치 × ANGLE_STEP
 YAW_IDX_MIN = -16
@@ -32,9 +32,9 @@ YAW_IDX_MAX = 16
 PITCH_IDX_MIN = -5
 PITCH_IDX_MAX = 5
 
-# SHARP eye 매핑: 슬라이더 최대 수치 × ANGLE_STEP
-YAW_RANGE_DEG = float(YAW_IDX_MAX) * ANGLE_STEP    # 16 → 48°
-PITCH_RANGE_DEG = float(PITCH_IDX_MAX) * ANGLE_STEP  # 5 → 15°
+# UI 표시용 슬라이더 최대 각도
+YAW_RANGE_DEG = float(YAW_IDX_MAX) * ANGLE_STEP
+PITCH_RANGE_DEG = float(PITCH_IDX_MAX) * ANGLE_STEP
 
 MAX_DISPARITY = 0.10
 OUTER_BLUR_SIGMA = 8.0          # 미리보기용 (드래그)
@@ -250,8 +250,6 @@ def reframe_analyze(image, progress=gr.Progress()):
         yaw_idx_min=YAW_IDX_MIN, yaw_idx_max=YAW_IDX_MAX,
         pitch_idx_min=PITCH_IDX_MIN, pitch_idx_max=PITCH_IDX_MAX,
         angle_step=ANGLE_STEP,
-        yaw_range_deg=YAW_RANGE_DEG,
-        pitch_range_deg=PITCH_RANGE_DEG,
         out_long=PREVIEW_MAX, max_disparity=MAX_DISPARITY,
         progress=progress,
     )
@@ -310,8 +308,6 @@ def reframe_commit(scene, _disp, img_np, yaw_idx, pitch_idx, progress=gr.Progres
     progress(0.25, desc="Reframe — gsplat 정확 각도 렌더")
     rgb, alpha = sharp_render.render_view(
         scene, yaw_deg, pitch_deg,
-        yaw_max_deg=YAW_RANGE_DEG,
-        pitch_max_deg=PITCH_RANGE_DEG,
         out_long=COMMIT_LONG,
         max_disparity=MAX_DISPARITY,
     )

@@ -39,8 +39,6 @@ def build_view_grid(
     pitch_idx_min: int = -5,
     pitch_idx_max: int = 5,
     angle_step: float = 3.0,
-    yaw_range_deg: float = 16.0,
-    pitch_range_deg: float = 5.0,
     out_long: int = 1024,
     max_disparity: float = 0.08,
     progress=None,
@@ -73,8 +71,6 @@ def build_view_grid(
     for i, (yaw, pitch) in enumerate(pairs):
         rgb, alpha = sharp_render.render_view(
             scene, yaw, pitch,
-            yaw_max_deg=yaw_range_deg,
-            pitch_max_deg=pitch_range_deg,
             out_long=out_long,
             max_disparity=max_disparity,
             offset_x_m=offset_x,
