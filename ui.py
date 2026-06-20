@@ -110,7 +110,7 @@ def build_ui() -> gr.Blocks:
                 height=560,
                 sources=["upload"],
                 type="numpy",
-                brush=gr.Brush(colors=["#FF0000"], color_mode="fixed"),
+                brush=gr.Brush(colors=["#FF0000"], color_mode="fixed", default_size=8),
                 eraser=False,
                 layers=True,
                 visible=False,
