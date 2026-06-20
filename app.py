@@ -20,7 +20,7 @@ except Exception:
     pass
 
 from features.shared import DEVICE
-from ui import build_ui
+from ui import UI_CSS, build_ui
 
 
 if __name__ == "__main__":
@@ -37,4 +37,9 @@ if __name__ == "__main__":
 
     print(f"[app] device = {DEVICE} · OpenEdit (Clean Up · Expand · Reframe)")
     port = args.port if args.port != 7860 else None
-    build_ui().launch(share=args.share, server_port=port)
+    build_ui().launch(
+        share=args.share,
+        server_port=port,
+        footer_links=[],
+        css_paths=[str(UI_CSS)],
+    )

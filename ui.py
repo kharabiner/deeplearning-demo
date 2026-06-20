@@ -4,6 +4,8 @@ ui.py — OpenEdit Gradio UI (Clean Up · Expand · Reframe)
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import gradio as gr
 
 from features import clean_up, expand, reframe
@@ -15,13 +17,13 @@ from features.reframe import (
 )
 
 
+_ASSETS = Path(__file__).resolve().parent / "assets"
+UI_CSS = _ASSETS / "ui.css"
+
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="OpenEdit — iOS 사진편집") as demo:
-        gr.Markdown(
-            "# OpenEdit\n"
-            "**iOS 27 (Clean Up · Expand · Reframe)** — "
-            "SHARP · gsplat · SAM2 · LaMa · DreamShaper"
-        )
+        gr.Markdown("# OpenEdit")
 
         st_scene = gr.State()
         st_disp = gr.State()
@@ -48,11 +50,24 @@ def build_ui() -> gr.Blocks:
                     layers=True,
                     visible=False,
                 )
+                with gr.Row(elem_classes=["tool-bar"], elem_id="openedit-toolbar"):
+                    btn_clean_up = gr.Button(
+                        "Clean Up", size="lg",
+                        elem_id="tool-clean-up",
+                        elem_classes=["tool-btn", "tool-clean-up"],
+                    )
+                    btn_expand = gr.Button(
+                        "Extend", size="lg",
+                        elem_id="tool-expand",
+                        elem_classes=["tool-btn", "tool-expand"],
+                    )
+                    btn_reframe = gr.Button(
+                        "Reframe", size="lg",
+                        elem_id="tool-reframe",
+                        elem_classes=["tool-btn", "tool-reframe"],
+                    )
 
             with gr.Column(scale=1):
-                btn_clean_up = gr.Button("Clean Up · 지우기", size="lg")
-                btn_expand = gr.Button("Expand · 확장", size="lg")
-                btn_reframe = gr.Button("Reframe · 시점 변경", size="lg", variant="primary")
 
                 with gr.Group(visible=False) as grp_clean_up:
                     gr.Markdown("**Clean Up** — 브러시/텍스트로 객체 선택 후 제거")
