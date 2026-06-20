@@ -13,8 +13,6 @@ from features import clean_up, expand, reframe
 from features.reframe import (
     YAW_IDX_MIN, YAW_IDX_MAX, YAW_STEP,
     PITCH_IDX_MIN, PITCH_IDX_MAX, PITCH_STEP,
-    YAW_RANGE_DEG, PITCH_RANGE_DEG,
-    ANGLE_STEP,
 )
 from features.shared import DEVICE
 
@@ -93,8 +91,6 @@ def _clear_out(img_np):
 
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="OpenEdit — iOS 사진편집") as demo:
-        gr.Markdown("# OpenEdit")
-
         st_scene = gr.State()
         st_disp = gr.State()
         st_plate = gr.State()
@@ -143,42 +139,67 @@ def build_ui() -> gr.Blocks:
                     )
 
             with gr.Group(visible="hidden", elem_id="panel-clean-up") as grp_clean_up:
-                gr.Markdown("**Clean Up** — 브러시로 객체 선택 후 제거")
-                with gr.Row():
-                    btn_clean_up_clear = gr.Button("선택 초기화")
-                    btn_clean_up_commit = gr.Button("완료 (제거)", variant="primary")
-                    btn_clean_up_cancel = gr.Button("뒤로")
+                with gr.Row(elem_id="clean-up-actions"):
+                    btn_clean_up_clear = gr.Button(
+                        "Clear", elem_classes=["mode-btn", "mode-btn-clear"],
+                    )
+                    btn_clean_up_commit = gr.Button(
+                        "Done", elem_classes=["mode-btn", "mode-btn-done"],
+                    )
+                    btn_clean_up_cancel = gr.Button(
+                        "Back", elem_classes=["mode-btn", "mode-btn-back"],
+                    )
 
             with gr.Group(visible="hidden", elem_id="panel-expand") as grp_expand:
-                gr.Markdown("**Expand** — LaMa 미리보기 → [완료] DreamShaper SD1.5")
-                extend = gr.Slider(
-                    1.0, 1.6, 1.0, step=0.02,
-                    label="프레임 축소 (1.0=원본, 1.6=최대)",
-                )
-                with gr.Row():
-                    btn_expand_commit = gr.Button("완료 (SD 생성)", variant="primary")
-                    btn_expand_cancel = gr.Button("뒤로")
+                with gr.Row(elem_id="expand-layout", equal_height=True):
+                    with gr.Column(scale=4, elem_id="expand-sliders-col"):
+                        extend = gr.Slider(
+                            1.0, 1.6, 1.0, step=0.02,
+                            label="Scale",
+                            elem_id="slider-expand",
+                            elem_classes=["mode-slider"],
+                            container=False,
+                            buttons=[],
+                            min_width=0,
+                        )
+                    with gr.Column(scale=1, min_width=100, elem_id="expand-actions-col"):
+                        with gr.Row(elem_id="expand-actions"):
+                            btn_expand_commit = gr.Button(
+                                "Done", elem_classes=["mode-btn", "mode-btn-done"],
+                            )
+                            btn_expand_cancel = gr.Button(
+                                "Back", elem_classes=["mode-btn", "mode-btn-back"],
+                            )
 
             with gr.Group(visible="hidden", elem_id="panel-reframe") as grp_reframe:
-                gr.Markdown("**Reframe** — yaw 좌우 · pitch 상하")
-                gr.Markdown(
-                    f"슬라이더 **수치** (각도 아님) · **1당 {ANGLE_STEP:g}°** · "
-                    f"좌우 **{YAW_IDX_MIN}~{YAW_IDX_MAX}** (최대 ±{YAW_RANGE_DEG:g}°) · "
-                    f"상하 **{PITCH_IDX_MIN}~{PITCH_IDX_MAX}** (최대 ±{PITCH_RANGE_DEG:g}°) · "
-                    f"{(YAW_IDX_MAX - YAW_IDX_MIN + 1) * (PITCH_IDX_MAX - PITCH_IDX_MIN + 1)}프레임"
-                )
-                with gr.Row():
-                    yaw = gr.Slider(
-                        minimum=YAW_IDX_MIN, maximum=YAW_IDX_MAX, value=0, step=YAW_STEP,
-                        label=f"좌우 ({YAW_IDX_MIN}~{YAW_IDX_MAX}, ×{ANGLE_STEP:g}°)",
-                    )
-                    pitch = gr.Slider(
-                        minimum=PITCH_IDX_MIN, maximum=PITCH_IDX_MAX, value=0, step=PITCH_STEP,
-                        label=f"상하 ({PITCH_IDX_MIN}~{PITCH_IDX_MAX}, ×{ANGLE_STEP:g}°)",
-                    )
-                with gr.Row():
-                    btn_reframe_commit = gr.Button("완료 — DreamShaper 바깥 생성", variant="primary")
-                    btn_reframe_cancel = gr.Button("뒤로")
+                with gr.Row(elem_id="reframe-layout", equal_height=True):
+                    with gr.Column(scale=4, elem_id="reframe-sliders-col"):
+                        yaw = gr.Slider(
+                            minimum=YAW_IDX_MIN, maximum=YAW_IDX_MAX, value=0, step=YAW_STEP,
+                            label="Horizontal",
+                            elem_id="slider-yaw",
+                            elem_classes=["mode-slider"],
+                            container=False,
+                            buttons=[],
+                            min_width=0,
+                        )
+                        pitch = gr.Slider(
+                            minimum=PITCH_IDX_MIN, maximum=PITCH_IDX_MAX, value=0, step=PITCH_STEP,
+                            label="Vertical",
+                            elem_id="slider-pitch",
+                            elem_classes=["mode-slider"],
+                            container=False,
+                            buttons=[],
+                            min_width=0,
+                        )
+                    with gr.Column(scale=1, min_width=100, elem_id="reframe-actions-col"):
+                        with gr.Row(elem_id="reframe-actions"):
+                            btn_reframe_commit = gr.Button(
+                                "Done", elem_classes=["mode-btn", "mode-btn-done"],
+                            )
+                            btn_reframe_cancel = gr.Button(
+                                "Back", elem_classes=["mode-btn", "mode-btn-back"],
+                            )
 
         canvas_vis = [canvas, clean_up_editor]
         mode_outs = [grp_toolbar, grp_reframe, grp_expand, grp_clean_up]
