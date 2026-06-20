@@ -162,7 +162,7 @@ def _lama_backdrop(img_np, progress) -> np.ndarray:
 # ── 1) 분석 (LaMa만 — SD 로드 없음) ───────────────────────────────────────────
 def expand_analyze(image, progress=gr.Progress()):
     if image is None:
-        raise gr.Error("먼저 왼쪽에 사진을 업로드하세요.")
+        raise gr.Error("먼저 사진을 업로드하세요.")
     rinp.unload_expand_sd15()
     from features.clean_up import unload_sam
     unload_sam()

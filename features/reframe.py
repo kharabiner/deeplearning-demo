@@ -222,7 +222,7 @@ def _present(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarray:
 
 def reframe_analyze(image, progress=gr.Progress()):
     if image is None:
-        raise gr.Error("먼저 왼쪽에 사진을 업로드하세요.")
+        raise gr.Error("먼저 사진을 업로드하세요.")
 
     rinp.unload_expand_sd15()
     from features.clean_up import unload_sam

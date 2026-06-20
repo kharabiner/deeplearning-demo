@@ -1,23 +1,85 @@
-/* iOS-style circular tool buttons */
-#openedit-toolbar.block {
+#openedit-main {
+  max-width: 920px !important;
+  margin: 0 auto !important;
+}
+
+/* Gradio 로딩/포커스 주황색 테두리 전역 제거 */
+#openedit-main .border_focus,
+#openedit-main .block.border_focus,
+#openedit-main .row.border_focus,
+#openedit-main .gr-group.border_focus {
+  border-color: transparent !important;
+  border-width: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+#openedit-main *:focus,
+#openedit-main *:focus-visible {
+  outline: none !important;
+}
+
+/* 툴바 — Gradio .hide 클래스 존중, 배경 투명 */
+#toolbar-wrap,
+#toolbar-wrap.gr-group,
+#toolbar-wrap.border_focus,
+#toolbar-wrap .styler {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+#toolbar-wrap.hide,
+.toolbar-wrap.hide {
+  display: none !important;
+}
+
+#toolbar-wrap:not(.hide) #openedit-toolbar,
+.toolbar-wrap:not(.hide) #openedit-toolbar {
   display: flex !important;
   justify-content: center !important;
-  align-items: flex-start !important;
-  gap: 2.75rem !important;
-  padding: 1rem 0 0.5rem !important;
+  align-items: center !important;
+  width: 100% !important;
+  gap: 2rem !important;
+  padding: 0.75rem 0 0.25rem !important;
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
   min-height: unset !important;
 }
 
-#openedit-toolbar .block {
-  flex: 0 0 auto !important;
-  min-width: unset !important;
-  width: auto !important;
+#openedit-toolbar,
+#openedit-toolbar.border_focus {
   border: none !important;
-  background: transparent !important;
+  outline: none !important;
   box-shadow: none !important;
+}
+
+#openedit-toolbar > button {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+#openedit-toolbar button,
+#openedit-toolbar button:hover,
+#openedit-toolbar button:focus,
+#openedit-toolbar button:focus-visible,
+#openedit-toolbar button:active,
+#openedit-toolbar button[disabled],
+#openedit-toolbar button.disabled,
+#openedit-toolbar button.secondary {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  opacity: 1 !important;
+  filter: none !important;
 }
 
 #tool-clean-up,
@@ -26,12 +88,13 @@
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
-  justify-content: flex-start !important;
+  justify-content: center !important;
   gap: 0.45rem !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
+  margin: 0 !important;
   min-width: unset !important;
   width: auto !important;
   height: auto !important;
@@ -40,18 +103,35 @@
   letter-spacing: -0.01em !important;
   color: #1c1c1e !important;
   line-height: 1.2 !important;
+  text-align: center !important;
 }
 
 #tool-clean-up:hover,
+#tool-clean-up:focus,
 #tool-clean-up:focus-visible,
+#tool-clean-up:active,
 #tool-expand:hover,
+#tool-expand:focus,
 #tool-expand:focus-visible,
+#tool-expand:active,
 #tool-reframe:hover,
-#tool-reframe:focus-visible {
+#tool-reframe:focus,
+#tool-reframe:focus-visible,
+#tool-reframe:active {
   background: transparent !important;
   color: #1c1c1e !important;
   transform: none !important;
   box-shadow: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+#tool-clean-up[disabled],
+#tool-expand[disabled],
+#tool-reframe[disabled] {
+  background: transparent !important;
+  opacity: 1 !important;
+  filter: none !important;
 }
 
 #tool-clean-up::before,
@@ -87,7 +167,57 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5V2M12 22v-3M5 12H2M22 12h-3'/%3E%3Cpath d='M8 8L5.5 5.5M16 8l2.5-2.5M8 16l-2.5 2.5M16 16l2.5 2.5'/%3E%3C/svg%3E");
 }
 
-/* Hide Gradio footer (API · Built with Gradio · Settings) */
+/* 기능 패널 — .hide 존중 */
+#panel-clean-up.hide,
+#panel-expand.hide,
+#panel-reframe.hide {
+  display: none !important;
+}
+
+#panel-clean-up:not(.hide),
+#panel-expand:not(.hide),
+#panel-reframe:not(.hide) {
+  margin-top: 0.5rem !important;
+  padding: 0.75rem 1rem !important;
+  border: 1px solid #e5e5ea !important;
+  border-color: #e5e5ea !important;
+  border-radius: 12px !important;
+  background: #fafafa !important;
+  max-height: 320px !important;
+  overflow-y: auto !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+#panel-clean-up.border_focus,
+#panel-expand.border_focus,
+#panel-reframe.border_focus {
+  border: 1px solid #e5e5ea !important;
+  border-color: #e5e5ea !important;
+}
+
+#panel-clean-up button,
+#panel-expand button,
+#panel-reframe button,
+#panel-clean-up button:hover,
+#panel-expand button:hover,
+#panel-reframe button:hover,
+#panel-clean-up button:focus,
+#panel-expand button:focus,
+#panel-reframe button:focus,
+#panel-clean-up button:focus-visible,
+#panel-expand button:focus-visible,
+#panel-reframe button:focus-visible,
+#panel-clean-up button:active,
+#panel-expand button:active,
+#panel-reframe button:active,
+#panel-clean-up button[disabled],
+#panel-expand button[disabled],
+#panel-reframe button[disabled] {
+  outline: none !important;
+}
+
+/* Hide Gradio footer */
 footer {
   display: none !important;
 }

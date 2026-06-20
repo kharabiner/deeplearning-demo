@@ -3,10 +3,9 @@ features/clean_up.py — Clean Up (객체 지우기)
 
 iOS 27 "Clean Up" 재현: 사진에서 지우고 싶은 사물/사람을 브러시로 문질러
 선택하면 SAM2 로 자동 세그멘테이션 후 DreamShaper 인페인팅으로 깔끔히 제거한다.
-(텍스트 검색 → Grounding DINO 탐지 → SAM2 경로도 지원)
 
 UI 흐름:
-  clean_up_prepare → (브러시) clean_up_brush / (텍스트) clean_up_detect
+  clean_up_prepare → (브러시) clean_up_brush
   → (초기화) clean_up_clear → clean_up_commit
 """
 
@@ -148,7 +147,7 @@ def _sam_mask_from_stroke(img_np, stroke: np.ndarray, progress=None):
 # ── 1) 준비 ─────────────────────────────────────────────────────────────────────
 def clean_up_prepare(image, progress=gr.Progress()):
     if image is None:
-        raise gr.Error("먼저 왼쪽에 사진을 업로드하세요.")
+        raise gr.Error("먼저 사진을 업로드하세요.")
     rinp.unload_expand_sd15()
     unload_sam()
     free_memory(DEVICE)
@@ -160,13 +159,13 @@ def clean_up_prepare(image, progress=gr.Progress()):
         None, None, None, img_np, None, "clean_up",
         HIDDEN,
         gr.update(value=_editor_value(img_np), visible=True),
-        "Clean Up: 지우고 싶은 객체를 **브러시로 문질러서 선택**하세요. (텍스트 검색도 가능)",
+        "Clean Up: 지우고 싶은 객체를 **브러시로 문질러서 선택**하세요.",
         HIDDEN, HIDDEN, VISIBLE,
         gr.skip(), gr.skip(),
     )
 
 
-# ── 2a) 브러시 선택 → SAM2 ──────────────────────────────────────────────────────
+# ── 2) 브러시 선택 → SAM2 ──────────────────────────────────────────────────────
 def clean_up_brush(mode, img_np, mask, editor_value, progress=gr.Progress()):
     if mode != "clean_up":
         return gr.skip(), gr.skip(), gr.skip()
@@ -191,45 +190,6 @@ def clean_up_brush(mode, img_np, mask, editor_value, progress=gr.Progress()):
         _editor_value(img_np, new_mask),
         new_mask,
         f"선택됨 · {n_px:,} px · 추가 문지르기 가능 · [완료]로 지우기",
-    )
-
-
-# ── 2b) 텍스트 검색 → Grounding DINO + SAM2 ─────────────────────────────────────
-def clean_up_detect(img_np, text_prompt, progress=gr.Progress()):
-    if img_np is None:
-        raise gr.Error("먼저 Clean Up 버튼을 누르세요.")
-    prompt = (text_prompt or "").strip()
-    if not prompt:
-        raise gr.Error("검색할 객체를 영어로 입력하세요. 예: person . bottle .")
-
-    import task_detection_groundingdino as det
-    import task_segmentation_sam2 as seg
-
-    pil = numpy_to_pil(img_np)
-    progress(0.3, desc="Grounding DINO 탐지")
-    dproc, dmodel = det.load_model(DEVICE)
-    try:
-        result = det.run(pil, dproc, dmodel, text_prompt=prompt, device=DEVICE)
-    finally:
-        del dproc, dmodel
-        free_memory(DEVICE)
-
-    boxes = result["boxes"].tolist()
-    if not boxes:
-        return _editor_value(img_np, None), None, f"탐지 없음 · prompt={prompt}"
-
-    progress(0.55, desc="SAM2 세그멘테이션")
-    sproc, smodel = _ensure_sam(progress)
-    seg_results = seg.run_with_boxes(pil, sproc, smodel, boxes, device=DEVICE)
-
-    combined = np.zeros(img_np.shape[:2], dtype=bool)
-    for r in seg_results:
-        combined |= r["mask"]
-    labels = ", ".join(result["labels"][:4])
-    n_px = int(combined.sum())
-    return (
-        _editor_value(img_np, combined), combined,
-        f"탐지 {len(boxes)}개 · {labels} · {n_px:,} px",
     )
 
 
