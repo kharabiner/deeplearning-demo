@@ -31,8 +31,9 @@ weights/
 .ipynb_checkpoints/
 *.ipynb
 
-# 텍스트 (개인 자료)
+# 텍스트 (개인 자료) — requirements.txt 는 예외
 *.txt
+!requirements.txt
 
 # 개인 정리 자료
 기말데모_정리.md

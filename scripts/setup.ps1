@@ -8,10 +8,21 @@ if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "Python launcher (py) not found."
 }
 
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git not found (required to clone apple/ml-sharp for Reframe)."
+}
+
 py -3.10 --version *> $null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Python 3.10 required. Install: winget install Python.Python.3.10"
     exit 1
+}
+
+$sharpDir = "third_party\ml-sharp"
+if (-not (Test-Path "$sharpDir\.git")) {
+    New-Item -ItemType Directory -Force -Path "third_party" | Out-Null
+    Write-Host "Cloning apple/ml-sharp into $sharpDir ..."
+    git clone --depth 1 https://github.com/apple/ml-sharp.git $sharpDir
 }
 
 if (-not (Test-Path ".venv")) {
