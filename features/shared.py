@@ -40,9 +40,10 @@ FALLBACK_PROMPT_CLEANUP = (
 )
 
 # Expand / Reframe — 고정 DreamShaper 프롬프트 (LaMa·캔버스가 맥락 제공, VLM 불필요)
+# 장면 내용만 — continuation/photograph 등 작업·메타 단어는 액자·엉뚱한 배경 유발
 SD15_PROMPT_EXPAND = (
-    "natural scene continuation, photorealistic photograph, "
-    "same lighting and colors, highly detailed, sharp focus"
+    "same background and scenery, matching colors and lighting, "
+    "photorealistic, highly detailed, sharp focus"
 )
 SD15_PROMPT_REFRAME = (
     "same room and environment, natural lighting, photorealistic, sharp focus"
