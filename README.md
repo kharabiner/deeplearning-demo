@@ -1,10 +1,10 @@
 # Deep Learning Assignment — Foundation Model Tasks
 
-Hugging Face foundation model 기반 **중간 과제** 단독 스크립트 + **기말 통합 데모** 코드입니다.
+Hugging Face foundation model 기반 **중간 과제** 단독 스크립트 + **기말 통합 데모** 코드
 
 ## 기말 데모 — OpenEdit
 
-**iOS 27 사진편집 3기능(Clean Up · Expand · Reframe)**을 오픈 파운데이션 모델로 재현한 통합 Gradio 앱
+iOS 27 사진편집 3기능(Clean Up · Expand · Reframe)**을 오픈 파운데이션 모델로 재현한 통합 Gradio 앱
 
 
 | 요건 (기말 과제)         | 충족                                  |
@@ -100,7 +100,6 @@ pip install -e third_party/ml-sharp
 
 
 - **개발·테스트:** Windows + RTX 3070 Ti(8GB) 등에서 전 기능 동작. 8GB VRAM은 모델 **순차 load/unload**.
-- **강의실 라이브 데모:** 과제 안내상 **GPU 있는 Mac/Linux 노트북**(또는 원격 서버 + 화면 연결) 권장. 발표 전 **화면 연결(커넥션) 테스트** 권장.
 
 ---
 
@@ -111,8 +110,6 @@ python demo.py
 python demo.py --share    # 외부 공유 링크 (Gradio)
 python demo.py --port 7860
 ```
-
-브라우저에서 사진 업로드 → **Clean Up / Expand / Reframe** → 미리보기 조작 → **[완료]**.
 
 ### 기능
 
