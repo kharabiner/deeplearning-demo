@@ -1,6 +1,39 @@
 #openedit-main {
   max-width: 920px !important;
   margin: 0 auto !important;
+  position: relative !important;
+}
+
+/* ── OpenEdit 로고 (좌상단) ── */
+#openedit-logo,
+#openedit-logo .prose,
+#openedit-logo .html-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-height: unset !important;
+}
+
+#openedit-logo {
+  align-self: flex-start !important;
+  width: auto !important;
+  margin-bottom: 0.65rem !important;
+}
+
+#openedit-logo .openedit-logo {
+  display: flex !important;
+  align-items: center !important;
+  line-height: 0 !important;
+  user-select: none !important;
+}
+
+#openedit-logo svg {
+  display: block !important;
+  height: 24px !important;
+  width: auto !important;
+  opacity: 0.94 !important;
 }
 
 /* Gradio 로딩/포커스 주황색 테두리 전역 제거 */

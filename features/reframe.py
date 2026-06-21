@@ -24,7 +24,7 @@ from .shared import (
     SD15_PROMPT_REFRAME, dilate_mask, blur_holes,
 )
 
-ANGLE_STEP = 10.0
+ANGLE_STEP = 5.0
 
 # 슬라이더 = 정수 수치 (step 1). 실제 각도(°) = 수치 × ANGLE_STEP
 YAW_IDX_MIN = -16

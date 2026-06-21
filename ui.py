@@ -19,6 +19,13 @@ from features.shared import DEVICE
 
 _ASSETS = Path(__file__).resolve().parent / "assets"
 UI_CSS = _ASSETS / "ui.css"
+OPENEDIT_LOGO_SVG = (_ASSETS / "openedit-logo.svg").read_text(encoding="utf-8")
+
+
+def _logo_html() -> str:
+    return (
+        f'<div class="openedit-logo" aria-hidden="false">{OPENEDIT_LOGO_SVG}</div>'
+    )
 
 HIDE = gr.update(visible="hidden")
 SHOW = gr.update(visible=True)
@@ -101,6 +108,7 @@ def build_ui() -> gr.Blocks:
         edit_states = [st_scene, st_disp, st_plate, st_img, st_mask, st_mode]
 
         with gr.Column(elem_id="openedit-main"):
+            gr.HTML(_logo_html(), elem_id="openedit-logo", show_label=False)
             canvas = gr.Image(
                 type="pil", label="사진", height=560,
                 sources=["upload"], interactive=True,
