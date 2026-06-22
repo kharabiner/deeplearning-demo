@@ -1,20 +1,10 @@
 # Deep Learning Assignment — Foundation Model Tasks
 
-Hugging Face foundation model 기반 **중간 과제** 단독 스크립트 + **기말 통합 데모** 코드
+Hugging Face foundation model 기반 **통합 데모** 코드
 
-## 기말 데모 — OpenEdit
+## OpenEdit
 
 iOS 27 사진편집 3기능(Clean Up · Expand · Reframe)**을 오픈 파운데이션 모델로 재현한 통합 Gradio 앱
-
-
-| 요건 (기말 과제)         | 충족                                  |
-| ------------------ | ----------------------------------- |
-| 파운데이션 모델 3개 이상     | **6종** (아래 표) — VLM(Qwen2-VL) 포함    |
-| HF 토큰·등록 없이 다운로드   | 전 모델 공개 ID, 최초 실행 시 자동 캐시           |
-| fully reproducible | `git clone` → 설치 → `python demo.py` |
-| CUDA / CPU / MPS   | `common.get_device()` 자동 분기         |
-| README 설치·실행 안내    | 본 문서                                |
-
 
 ---
 
@@ -29,32 +19,60 @@ cd deeplearning-demo
 
 ## Installation
 
-**Python 3.10 권장** (Windows에서 gsplat CUDA wheel + torch 2.4.1+cu124 조합). Python 3.11 `.venv`는 Reframe gsplat 미지원(torch splat 폴백만 가능).
+**Python 3.10 필수** (Windows에서 gsplat CUDA wheel + torch 2.4.1+cu124 조합). Python 3.11 `.venv`는 Reframe gsplat 미지원(torch splat 폴백만 가능).
+
+### 사전 요구사항
+
+
+| 항목              | Windows                  | Linux (Ubuntu/Debian)                            | macOS                      |
+| --------------- | ------------------------ | ------------------------------------------------ | -------------------------- |
+| **Python 3.10** | 아래 설치                    | `sudo apt install -y python3.10 python3.10-venv` | `brew install python@3.10` |
+| **git**         | `winget install Git.Git` | `sudo apt install -y git`                        | `brew install git`         |
+| **NVIDIA GPU**  | Reframe gsplat 권장        | 동일                                               | gsplat 미지원 — Reframe 비권장   |
+
+
+**Python 3.10 (Windows)** — `scripts\setup.ps1`은 `py -3.10` 런처를 사용합니다:
+
+```cmd
+winget install Python.Python.3.10
+py -3.10 --version
+```
+
+python.org 설치 시 **“Install launcher for all users”** 옵션을 켜 두세요. 설치 후 새 터미널을 열어 확인합니다.
+
+**NVIDIA (Reframe gsplat):** CUDA Toolkit 별도 설치 없이 **GPU 드라이버**만 필요합니다. torch **2.4.1+cu124** wheel은 [PyTorch](https://pytorch.org) 기준 **CUDA 12.4** 호환 드라이버(보통 545+)가 있어야 합니다.
 
 ### Windows (한 번에 설치)
 
+위 **Repository** 섹션에서 clone한 뒤:
+
 ```cmd
-git clone https://github.com/kharabiner/deeplearning-demo.git
 cd deeplearning-demo
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 .venv\Scripts\activate
 python demo.py
 ```
 
-`scripts\setup.ps1`이 **apple/ml-sharp clone**(Reframe) → `.venv` 생성 → **torch 2.4.1+cu124 · gsplat · diffusers 0.36.0** 등을 설치합니다. `git`이 PATH에 있어야 합니다.
+`scripts\setup.ps1`이 **apple/ml-sharp clone**(Reframe) → Python 3.10 `.venv` 생성 → **torch 2.4.1+cu124 · gsplat · diffusers 0.36.0** 등을 설치합니다. Python 3.10·git이 없으면 스크립트가 종료되며, Python 3.10은 `winget install Python.Python.3.10` 안내가 출력됩니다.
 
 ### Linux / macOS (한 번에 설치)
 
 ```bash
-git clone https://github.com/kharabiner/deeplearning-demo.git
 cd deeplearning-demo
 bash scripts/setup.sh
 source .venv/bin/activate
-# NVIDIA GPU: https://pytorch.org 에서 CUDA torch 2.4 설치 후 (Reframe gsplat은 setup.ps1 README 참고)
 python demo.py
 ```
 
-`scripts/setup.sh`도 **ml-sharp를 자동 clone**합니다. PyTorch·gsplat(CUDA)은 플랫폼별로 별도 설치가 필요할 수 있습니다.
+`scripts/setup.sh`는 **ml-sharp clone** + Python 3.10 `.venv` + `requirements.txt` 등을 설치합니다. **PyTorch·gsplat(CUDA)은 포함되지 않습니다.** NVIDIA GPU에서 Reframe gsplat을 쓰려면 venv 활성화 후:
+
+```bash
+pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu124
+pip install ninja
+pip install "gsplat==1.5.3+pt24cu124" --index-url https://docs.gsplat.studio/whl/pt24cu124/ --extra-index-url https://pypi.org/simple/
+```
+
+macOS·CPU-only는 [PyTorch](https://pytorch.org)에서 플랫폼에 맞는 빌드를 설치하면 됩니다 (gsplat 없음 → Reframe은 PyTorch splat 폴백).
 
 ### SHARP (Reframe) — `third_party/ml-sharp`
 
@@ -68,7 +86,27 @@ pip install -e third_party/ml-sharp
 
 SHARP **가중치**(`sharp_2572gikvuh.pt`)는 최초 Reframe 실행 시 Apple CDN에서 자동 다운로드됩니다.
 
-### 수동 설치 (Linux / macOS)
+### 수동 설치
+
+**Windows**
+
+```cmd
+py -3.10 -m venv .venv
+.venv\Scripts\activate
+
+mkdir third_party
+git clone --depth 1 https://github.com/apple/ml-sharp.git third_party\ml-sharp
+
+pip install --upgrade pip setuptools wheel
+pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu124
+pip install ninja
+pip install "gsplat==1.5.3+pt24cu124" --index-url https://docs.gsplat.studio/whl/pt24cu124/ --extra-index-url https://pypi.org/simple/
+pip install -r requirements.txt
+pip install gradio==6.18.0 diffusers==0.36.0 transformers==5.5.0 accelerate==1.13.0 opencv-python==4.11.0.86 timm==1.0.26 simple-lama-inpainting==0.1.1 qwen-vl-utils==0.0.14 "imageio[ffmpeg]" "pillow>=10.0.0,<11.0.0"
+pip install -e third_party/ml-sharp
+```
+
+**Linux / macOS**
 
 ```bash
 python3.10 -m venv .venv
@@ -78,13 +116,16 @@ mkdir -p third_party
 git clone --depth 1 https://github.com/apple/ml-sharp.git third_party/ml-sharp
 
 pip install --upgrade pip setuptools wheel
-# NVIDIA GPU: https://pytorch.org 에서 CUDA 빌드 설치
+# NVIDIA GPU (Reframe gsplat):
+pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu124
+pip install ninja
+pip install "gsplat==1.5.3+pt24cu124" --index-url https://docs.gsplat.studio/whl/pt24cu124/ --extra-index-url https://pypi.org/simple/
 pip install -r requirements.txt
 pip install gradio==6.18.0 diffusers==0.36.0 transformers==5.5.0 accelerate==1.13.0 \
     opencv-python==4.11.0.86 timm==1.0.26 simple-lama-inpainting==0.1.1 qwen-vl-utils==0.0.14 \
     "imageio[ffmpeg]" "pillow>=10.0.0,<11.0.0"
 pip install -e third_party/ml-sharp
-# Reframe gsplat (CUDA, torch 2.4): setup.ps1 참고 — 없으면 PyTorch splat 폴백
+# gsplat 없으면 PyTorch splat 폴백 (Reframe 품질·속도 저하)
 ```
 
 가중치(SHARP·HF 모델)는 **최초 실행 시 자동 다운로드**(토큰 불필요). Hugging Face Hub 캐시에 저장되어 재실행 시 재사용됩니다.
@@ -103,7 +144,7 @@ pip install -e third_party/ml-sharp
 
 ---
 
-## Run — OpenEdit (기말 데모 · `demo.py`)
+## Run — OpenEdit 통합 실행
 
 ```cmd
 python demo.py
@@ -121,7 +162,7 @@ python demo.py --port 7860
 | **Reframe**  | **SHARP** 3D Gaussian + **gsplat** 시점 이동 | 슬라이더(좌우 −16~~+16, 상하 −5~~+5, **1당 5°**) · 구멍 블러 | gsplat + **DreamShaper** 디오클루전 채움    |
 
 
-### 파운데이션 모델 (기말 데모에서 실제 사용)
+### 파운데이션 모델 (OpenEdit에서 사용)
 
 
 | #   | 모델                  | HF ID / 출처                            | 역할                                     |
@@ -144,7 +185,7 @@ python demo.py --port 7860
 
 ---
 
-## Run — 중간 과제 단독 테스트
+## Run — 모델 단독 테스트
 
 저장소의 `sample.jpg`로 각 foundation model을 개별 실행할 수 있습니다.
 
@@ -163,31 +204,182 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 
 ## Brief explanation of each code
 
-중간 과제 요구사항(**각 코드에 대한 간단한 설명: 입력, 출력, 예시 결과**) + 기말 제출용 `**demo.py`** 설명입니다.
+### OpenEdit
 
-### `demo.py` — 기말 메인 데모 (OpenEdit)
+#### `demo.py` — 메인 진입점
 
 
 |        |                                                                              |
 | ------ | ---------------------------------------------------------------------------- |
 | **역할** | Gradio 웹 UI로 **Clean Up · Expand · Reframe** 통합 실행. `ui.py` + `features/` 호출 |
-| **입력** | 브라우저에서 **사진 업로드** · 브러시/슬라이더 조작 · [완료] 클릭                                    |
-| **출력** | 실시간 미리보기 · [완료] 후 편집 결과(Gradio 다운로드)                                         |
-| **예시** | `python demo.py` → `http://127.0.0.1:7860` · `sample.jpg` 업로드 후 기능 시연        |
+| **입력** | CLI: `--share`, `--port`. 브라우저에서 **사진 업로드** · 브러시/슬라이더 · [완료]                |
+| **출력** | `http://127.0.0.1:7860` Gradio 서버 · 실시간 미리보기 · [완료] 후 편집 결과                  |
+| **예시** | `python demo.py` · `python demo.py --share`                                  |
 
 
-### `common.py`
+#### `app.py` — `demo.py` 별칭
 
 
-|        |                                                                                                |
-| ------ | ---------------------------------------------------------------------------------------------- |
-| **역할** | 모든 `task_*.py` 공유 유틸: device(`cuda`/`mps`/`cpu`), 이미지 로드·resize, `outputs/` 저장, MPS float64 방지 |
-| **입력** | 직접 과제 입력 없음. `load_image(path)` 등으로 간접 호출                                                      |
-| **출력** | `device_info()` 콘솔 요약. 그림 저장은 각 `task_*.py`가 처리                                                |
-| **예시** | `python common.py` → device·dtype·출력 폴더 경로                                                     |
+|        |                           |
+| ------ | ------------------------- |
+| **역할** | `demo.main()` 재호출. 로컬 개발용 |
+| **입력** | `demo.py`와 동일             |
+| **출력** | `demo.py`와 동일             |
+| **예시** | `python app.py`           |
 
 
-### `task_detection_groundingdino.py` — Grounding DINO
+#### `ui.py` — Gradio UI
+
+
+|        |                                                                                        |
+| ------ | -------------------------------------------------------------------------------------- |
+| **역할** | OpenEdit 레이아웃·이벤트 배선. `features/clean_up`, `expand`, `reframe` 콜백 연결 · `assets/ui.css` |
+| **입력** | `build_ui()` — Gradio 컴포넌트(캔버스, 브러시, 슬라이더, 모드 버튼)                                      |
+| **출력** | `gr.Blocks` 앱. 모드별 툴바 표시/숨김 · cancel 시 SAM/Expand/Reframe 세션 정리                        |
+| **예시** | `demo.py`가 `from ui import build_ui` 후 `launch()`                                      |
+
+
+#### `features/shared.py` — 기능 공용 글루
+
+
+|        |                                                                                              |
+| ------ | -------------------------------------------------------------------------------------------- |
+| **역할** | VLM 캡션(Qwen2-VL) · DreamShaper `[완료]` 호출 · 마스크 dilate/feather · 프롬프트 정제 · VRAM `free_memory` |
+| **입력** | PIL/numpy 이미지·마스크 · VLM 질문 문자열 · SD15 프롬프트/네거티브                                              |
+| **출력** | 인페인팅 결과 PIL · Gradio `HIDDEN`/`VISIBLE` 업데이트                                                 |
+| **예시** | `clean_up.py` → `vlm_caption_clean_up()` · `expand.py` → `inpaint_commit()`                  |
+
+
+#### `features/clean_up.py` — Clean Up
+
+
+|        |                                                                                       |
+| ------ | ------------------------------------------------------------------------------------- |
+| **역할** | 브러시 획 → **SAM2** 마스크 → 미리보기 오버레이 → [완료] 시 **Qwen2-VL** 캡션 + **DreamShaper** 제거        |
+| **입력** | `clean_up_prepare` / `clean_up_brush` / `clean_up_clear` / `clean_up_commit` (Gradio) |
+| **출력** | 마스크 오버레이 미리보기 · 최종 인페인팅 이미지                                                           |
+| **예시** | UI에서 Clean Up 선택 → 브러시로 객체 칠하기 → [완료]                                                 |
+
+
+#### `features/expand.py` — Expand
+
+
+|        |                                                                                |
+| ------ | ------------------------------------------------------------------------------ |
+| **역할** | 프레임 축소·바깥 여백 노출. **LaMa** 배경(분석 1회) + 슬라이더 줌 미리보기 → [완료] **DreamShaper** 아웃페인팅 |
+| **입력** | `expand_analyze` / `expand_view`(슬라이더) / `expand_commit`                       |
+| **출력** | LaMa 합성 미리보기 · DreamShaper 확장 결과                                               |
+| **예시** | Expand 선택 → 슬라이더로 확장 비율 조절 → [완료]                                              |
+
+
+#### `features/reframe.py` — Reframe
+
+
+|        |                                                                                                        |
+| ------ | ------------------------------------------------------------------------------------------------------ |
+| **역할** | **SHARP** 3D Gaussian 예측 → yaw×pitch **프리렌더 그리드** → 슬라이더 시점 미리보기 → [완료] gsplat + **DreamShaper** 디오클루전 |
+| **입력** | `reframe_prepare` / `reframe_view`(yaw·pitch 슬라이더) / `reframe_commit`                                  |
+| **출력** | gsplat 렌더 + 구멍 블러 미리보기 · 최종 인페인팅 결과                                                                    |
+| **예시** | Reframe 선택 → 좌우·상하 슬라이더(−16~~+16, −5~~+5, **1칸=5°**) → [완료]                                            |
+
+
+### Reframe · 3D 렌더링
+
+#### `task_nvs_sharp.py` — Apple SHARP 예측
+
+
+|        |                                                                          |
+| ------ | ------------------------------------------------------------------------ |
+| **역할** | 단일 사진 → 3D Gaussian `SharpScene` 예측 (피드포워드). **렌더링은 `sharp_render.py`**  |
+| **입력** | `predict(image_path)` · CLI: `python task_nvs_sharp.py [sample.jpg]`     |
+| **출력** | `SharpScene`(means, scales, quats, colors, opacities). 콘솔: Gaussian 수·통계 |
+| **예시** | `python task_nvs_sharp.py sample.jpg` → SHARP 가중치 자동 다운로드 후 예측           |
+
+
+#### `sharp_render.py` — gsplat / PyTorch splat 렌더
+
+
+|        |                                                                                     |
+| ------ | ----------------------------------------------------------------------------------- |
+| **역할** | `SharpScene` → 카메라 extrinsics/intrinsics로 RGB+alpha 렌더. gsplat CUDA 우선, 없으면 폴백      |
+| **입력** | `SharpScene`, yaw/pitch(°), 출력 해상도                                                  |
+| **출력** | `(rgb ndarray, alpha ndarray)` · `renderer_label()` → `"gsplat"` 또는 `"torch splat"` |
+| **예시** | `reframe_yaw.build_view_grid()` · `features/reframe.py` commit 경로                   |
+
+
+#### `reframe_yaw.py` — yaw×pitch 프리렌더 그리드
+
+
+|        |                                                                                  |
+| ------ | -------------------------------------------------------------------------------- |
+| **역할** | 슬라이더 격자 전체를 **사전 gsplat 렌더** → 드래그 시 nearest view 조회 (CUDA에서 수 분 소요)             |
+| **입력** | `SharpScene`, yaw/pitch index 범위, `angle_step`                                   |
+| **출력** | `ViewGrid`(yaws, pitches, images, alphas) · `nearest(yaw, pitch)`                |
+| **예시** | `build_view_grid(scene, yaw_idx_min=-16, yaw_idx_max=16, pitch_idx_min=-5, ...)` |
+
+
+#### `splat_torch.py` — gsplat 불가 시 폴백
+
+
+|        |                                                              |
+| ------ | ------------------------------------------------------------ |
+| **역할** | PyTorch EWA Gaussian splat. Python 3.11·gsplat wheel 미지원 환경용 |
+| **입력** | `Gaussians3D`, extrinsics, intrinsics, width/height          |
+| **출력** | RGB tensor · alpha tensor                                    |
+| **예시** | `sharp_render.py`가 `gsplat_cuda_ready()` == False 일 때 호출     |
+
+
+### 인페인팅 백엔드
+
+#### `inpaint.py` — 백엔드 팩토리
+
+
+|        |                                                                                           |
+| ------ | ----------------------------------------------------------------------------------------- |
+| **역할** | `get_inpainter("sd15"|"lama")` · Expand용 DreamShaper **싱글톤** `get_expand_inpainter()`     |
+| **입력** | backend 문자열, device                                                                       |
+| **출력** | `.inpaint(image_pil, hole_mask, prompt?)` → PIL · `.unload()`                             |
+| **예시** | `features/clean_up.py` → `get_inpainter("sd15")` · `expand.py` → `get_expand_inpainter()` |
+
+
+#### `task_inpaint_sd15.py` — DreamShaper SD1.5
+
+
+|        |                                                                          |
+| ------ | ------------------------------------------------------------------------ |
+| **역할** | `Lykon/dreamshaper-8-inpainting` 래퍼. Clean Up · Expand · Reframe [완료]    |
+| **입력** | `--image` 필수. `--prompt`, `--box`(가운데 마스크 비율)                            |
+| **출력** | `SD15Inpainter.inpaint()` → PIL. 파일: `outputs/<stem>_dreamshaper.png`    |
+| **예시** | `python task_inpaint_sd15.py --image sample.jpg --prompt "wooden floor"` |
+
+
+#### `task_inpaint_lama.py` — LaMa
+
+
+|        |                                                                |
+| ------ | -------------------------------------------------------------- |
+| **역할** | `big-lama` 프롬프트 없는 빠른 인페인팅. Expand **미리보기** 배경                 |
+| **입력** | `--image` 필수. `--box`(가운데 마스크 비율)                              |
+| **출력** | `LaMaInpainter.inpaint()` → PIL. 파일: `outputs/<stem>_lama.png` |
+| **예시** | `python task_inpaint_lama.py --image sample.jpg`               |
+
+
+### 공통 유틸
+
+#### `common.py`
+
+
+|        |                                                                                            |
+| ------ | ------------------------------------------------------------------------------------------ |
+| **역할** | device(`cuda`/`mps`/`cpu`), dtype, 이미지 load/resize, `outputs/` 저장, MPS float64 방지, VRAM 해제 |
+| **입력** | `load_image(path)` 등 — `task_*.py`·`features/`에서 import                                    |
+| **출력** | `device_info()` 콘솔 요약. `save_result()` PNG 저장                                              |
+| **예시** | `python common.py` → device·dtype·출력 폴더 경로                                                 |
+
+
+### Foundation model 단독 테스트
+
+#### `task_detection_groundingdino.py` — Grounding DINO
 
 
 |        |                                                                                                                           |
@@ -197,7 +389,7 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 | **예시** | `python task_detection_groundingdino.py --image sample.jpg --prompt "person . laptop ."` → `outputs/sample_detection.png` |
 
 
-### `task_segmentation_sam2.py` — SAM 2
+#### `task_segmentation_sam2.py` — SAM 2
 
 
 |        |                                                                                                 |
@@ -207,7 +399,7 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 | **예시** | `--mode auto` → `outputs/sample_seg_auto.png` · `--mode point` → `outputs/sample_seg_point.png` |
 
 
-### `task_vlm_qwen2vl.py` — Qwen2-VL-2B
+#### `task_vlm_qwen2vl.py` — Qwen2-VL-2B
 
 
 |        |                                                                                            |
@@ -217,7 +409,7 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 | **예시** | `--question "What is in this image?"` → `outputs/sample_vlm.txt`, `outputs/sample_vlm.png` |
 
 
-### `task_depth_depthanythingv2.py` — Depth Anything V2
+#### `task_depth_depthanythingv2.py` — Depth Anything V2
 
 
 |        |                                                                                        |
@@ -227,7 +419,7 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 | **예시** | `python task_depth_depthanythingv2.py --image sample.jpg` → `outputs/sample_depth.png` |
 
 
-### `task_pose_vitpose.py` — ViTPose
+#### `task_pose_vitpose.py` — ViTPose
 
 
 |        |                                                     |
@@ -237,20 +429,26 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 | **예시** | `--score-threshold 0.6` → `outputs/sample_pose.png` |
 
 
-### 요약 표 (`sample.jpg` 기준)
+### 요약 표
 
 
-| Script                            | Example command                     | Output under `outputs/`            |
-| --------------------------------- | ----------------------------------- | ---------------------------------- |
-| `task_detection_groundingdino.py` | `--prompt "person ."`               | `sample_detection.png`             |
-| `task_segmentation_sam2.py`       | `--mode auto`                       | `sample_seg_auto.png`              |
-| `task_segmentation_sam2.py`       | `--mode point`                      | `sample_seg_point.png`             |
-| `task_vlm_qwen2vl.py`             | `--question "Describe this image."` | `sample_vlm.txt`, `sample_vlm.png` |
-| `task_depth_depthanythingv2.py`   | (없음)                                | `sample_depth.png`                 |
-| `task_pose_vitpose.py`            | (없음)                                | `sample_pose.png`                  |
+| Script / Module                   | Example / 호출                          | Output / 결과                          |
+| --------------------------------- | ------------------------------------- | ------------------------------------ |
+| `demo.py`                         | `python demo.py`                      | Gradio UI @ `:7860`                  |
+| `features/clean_up.py`            | UI Clean Up → [완료]                    | 인페인팅 결과                              |
+| `features/expand.py`              | UI Expand → [완료]                      | 아웃페인팅 결과                             |
+| `features/reframe.py`             | UI Reframe → [완료]                     | 시점 변경 + 디오클루전                        |
+| `task_detection_groundingdino.py` | `--prompt "person ."`                 | `sample_detection.png`               |
+| `task_segmentation_sam2.py`       | `--mode auto` / `point`               | `sample_seg_auto.png` / `_point.png` |
+| `task_vlm_qwen2vl.py`             | `--question "Describe this image."`   | `sample_vlm.txt`, `sample_vlm.png`   |
+| `task_depth_depthanythingv2.py`   | `--image sample.jpg`                  | `sample_depth.png`                   |
+| `task_pose_vitpose.py`            | `--score-threshold 0.6`               | `sample_pose.png`                    |
+| `task_inpaint_sd15.py`            | `--prompt "wooden floor"`             | `sample_dreamshaper.png`             |
+| `task_inpaint_lama.py`            | `--image sample.jpg`                  | `sample_lama.png`                    |
+| `task_nvs_sharp.py`               | `python task_nvs_sharp.py sample.jpg` | 콘솔 Gaussian 통계 (이미지 저장 없음)           |
 
 
-**Three foundation models:** 서로 다른 foundation model을 쓰는 `task_*.py`가 **5개**이므로 중간 과제 최소 3개 요건 충족.
+**Five standalone tasks:** `task_*.py` 5개가 각각 다른 foundation model을 사용합니다(detection·segmentation·VLM·depth·pose). OpenEdit은 위 `features/` + SHARP·gsplat·인페인팅 모듈이 추가로 결합됩니다.
 
 ---
 
@@ -258,7 +456,7 @@ python task_pose_vitpose.py --image sample.jpg --score-threshold 0.6
 
 ```
 deeplearning/
-  demo.py                # 기말 메인 데모 (제출·발표 진입점)
+  demo.py                # OpenEdit 메인 진입점
   app.py                 # demo.py 호환 별칭
   ui.py                  # Gradio UI
   features/
@@ -270,7 +468,7 @@ deeplearning/
   sharp_render.py        # SHARP + gsplat 렌더
   splat_torch.py         # gsplat 불가 시 PyTorch 폴백
   inpaint.py             # 인페인팅 팩토리 (sd15 / lama)
-  task_*.py              # 중간 과제 단독 스크립트
+  task_*.py              # foundation model 단독 스크립트
   task_inpaint_sd15.py   # DreamShaper SD1.5 inpaint
   task_inpaint_lama.py   # LaMa inpaint
   scripts/setup.ps1      # Windows: ml-sharp clone + Python 3.10 + .venv
@@ -288,11 +486,11 @@ deeplearning/
 
 | 태스크             | 모델                      | Hugging Face ID                             | 크기(대략) |
 | --------------- | ----------------------- | ------------------------------------------- | ------ |
-| Detection (중간)  | Grounding DINO base     | `IDEA-Research/grounding-dino-base`         | ~811MB |
+| Detection       | Grounding DINO base     | `IDEA-Research/grounding-dino-base`         | ~811MB |
 | Segmentation    | SAM 2 Hiera base+       | `facebook/sam2-hiera-base-plus`             | ~320MB |
 | VLM             | Qwen2-VL-2B-Instruct    | `Qwen/Qwen2-VL-2B-Instruct`                 | ~4GB   |
-| Depth (중간)      | Depth Anything V2 Small | `depth-anything/Depth-Anything-V2-Small-hf` | ~97MB  |
-| Pose (중간)       | ViTPose base            | `usyd-community/vitpose-base-simple`        | ~330MB |
+| Depth           | Depth Anything V2 Small | `depth-anything/Depth-Anything-V2-Small-hf` | ~97MB  |
+| Pose            | ViTPose base            | `usyd-community/vitpose-base-simple`        | ~330MB |
 | Inpaint         | DreamShaper 8 Inpaint   | `Lykon/dreamshaper-8-inpainting`            | ~2GB   |
 | Inpaint preview | LaMa                    | `big-lama`                                  | ~200MB |
 | NVS (Reframe)   | Apple SHARP             | `apple/ml-sharp`                            | ~수백MB  |
