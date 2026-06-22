@@ -4,7 +4,33 @@ Hugging Face foundation model 기반 **통합 데모** 코드
 
 ## OpenEdit
 
-iOS 27 사진편집 3기능(Clean Up · Expand · Reframe)**을 오픈 파운데이션 모델로 재현한 통합 Gradio 앱
+iOS 27 사진편집 3기능(Clean Up · Expand · Reframe)을 오픈 파운데이션 모델로 재현한 통합 Gradio 앱
+
+### Before / After
+
+#### Clean Up — 객체 제거
+
+| Before | After |
+| ------ | ----- |
+| ![Clean Up before](sample.jpg) | ![Clean Up after](assets/cleanup-after.webp) |
+
+`sample.jpg` · SAM2 마스크 + Qwen2-VL 캡션 + DreamShaper 인페인팅
+
+#### Expand — 프레임 확장
+
+| Before | After |
+| ------ | ----- |
+| ![Expand before](sample2.jpg) | ![Expand after](assets/expand-after.webp) |
+
+`sample2.jpg` · LaMa 미리보기 + DreamShaper 아웃페인팅
+
+#### Reframe — 시점 변경
+
+| Before | After |
+| ------ | ----- |
+| ![Reframe before](sample3.jpg) | ![Reframe after](assets/reframe-after.webp) |
+
+`sample3.jpg` · SHARP 3D Gaussian + gsplat 렌더 + DreamShaper 디오클루전
 
 ---
 
@@ -459,6 +485,12 @@ deeplearning/
   demo.py                # OpenEdit 메인 진입점
   app.py                 # demo.py 호환 별칭
   ui.py                  # Gradio UI
+  assets/
+    ui.css               # Gradio UI 스타일
+    openedit-logo.svg
+    cleanup-after.webp   # Clean Up 결과 (README)
+    expand-after.webp    # Expand 결과 (README)
+    reframe-after.webp   # Reframe 결과 (README)
   features/
     shared.py            # VLM 캡션 · 인페인팅 합성
     clean_up.py          # Clean Up (SAM2 + Qwen2-VL + DreamShaper)
